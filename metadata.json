@@ -1,0 +1,5 @@
+{
+  "name": "EV Charging Tracker",
+  "description": "A comprehensive electric vehicle charging tracker with public calculators, user dashboards, and a dedicated admin panel for system-wide monitoring.",
+  "requestFramePermissions": []
+}
