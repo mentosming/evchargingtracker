@@ -111,14 +111,8 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* Always show Calculator unless in Admin mode. */}
-        {!isAdminMode && (
-          <div className="mb-8">
-            <PublicCalculator />
-          </div>
-        )}
-
-        <div className="transition-all duration-300">
+        {/* Main Content Area: UserDashboard / Admin / Intro */}
+        <div className="transition-all duration-300 mb-12">
           {!user ? (
             <IntroGuide />
           ) : isAdminMode ? (
@@ -127,6 +121,16 @@ const App: React.FC = () => {
             <UserDashboard user={user} />
           )}
         </div>
+
+        {/* Public Calculator (Moved to Bottom) */}
+        {!isAdminMode && (
+          <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
+            <h3 className="text-center text-sm font-bold text-slate-400 dark:text-slate-500 mb-6 uppercase tracking-widest">
+              Utility Tools
+            </h3>
+            <PublicCalculator />
+          </div>
+        )}
       </main>
 
       <footer className="text-center text-slate-400 dark:text-slate-600 text-sm mt-12 mb-6">

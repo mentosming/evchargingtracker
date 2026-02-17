@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ADMIN_EMAIL } from '../types';
 import { loginWithGoogle, logout } from '../services/firebase';
-import { LogOut, ShieldCheck, Moon, Sun, Type, Coffee, Download } from 'lucide-react';
+import { LogOut, ShieldCheck, Moon, Sun, Type, Coffee, Share, X, Smartphone, Menu } from 'lucide-react';
 
 interface NavbarProps {
   user: User | null;
@@ -53,6 +53,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const isAdmin = user?.email === ADMIN_EMAIL;
   const [imgError, setImgError] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   useEffect(() => {
     // Cast window to any to avoid TypeScript error on non-standard event
@@ -73,144 +74,227 @@ const Navbar: React.FC<NavbarProps> = ({
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
+    setShowShareModal(false);
+  };
+
+  const handleShareClick = () => {
+    // Priority 1: If native install prompt is available, use it
+    if (deferredPrompt) {
+        handleInstallClick();
+    } else {
+        // Priority 2: Show instructions modal
+        setShowShareModal(true);
+    }
   };
 
   return (
-    <nav className="glass sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/50 dark:border-slate-800/50 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row justify-center md:justify-between py-3 md:py-0 md:h-16 gap-3 md:gap-0">
-          
-          {/* Top Row (Mobile): Branding & Coffee */}
-          <div className="flex items-center justify-between md:justify-start md:gap-6 w-full md:w-auto">
-            <div className="flex-shrink-0 flex items-center gap-3 group cursor-default">
-              
-              <div className="relative">
-                {!imgError ? (
-                  <div className="bg-white p-0.5 rounded-xl shadow-lg shadow-emerald-500/10 border border-slate-100 dark:border-slate-800 transition-transform group-hover:scale-105 duration-300 overflow-hidden">
-                    <img 
-                      src="/logo.png" 
-                      alt="EV Tracker Logo" 
-                      className="h-9 w-9 object-contain"
-                      onError={() => setImgError(true)}
-                    />
-                  </div>
-                ) : (
-                  <DefaultLogo />
-                )}
-              </div>
-              
-              <div className="flex flex-col leading-none select-none">
-                <span className="font-black text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300">
-                  EV Charging Tracker
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 mt-0.5 group-hover:text-emerald-500/80 transition-colors">
-                  馭電智行
-                </span>
-              </div>
-            </div>
-
-            {/* Buy Me A Coffee Button */}
-            <a 
-              href="https://buymeacoffee.com/evchargingtracker.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFDD00] text-slate-900 rounded-lg hover:bg-[#FFEA00] transition-all shadow-sm hover:shadow-md active:scale-95 group/coffee"
-              title="請我喝杯咖啡"
-            >
-              <Coffee size={15} className="stroke-[2.5] text-slate-900 group-hover/coffee:rotate-12 transition-transform" />
-              <span className="hidden sm:inline text-[11px] font-black tracking-wide">Buy me a coffee</span>
-            </a>
-          </div>
-          
-          {/* Bottom Row (Mobile): Controls */}
-          <div className="flex items-center justify-end gap-2 md:gap-4 w-full md:w-auto border-t md:border-t-0 border-slate-100 dark:border-slate-800/50 pt-3 md:pt-0">
+    <>
+      <nav className="glass sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/50 dark:border-slate-800/50 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row justify-center md:justify-between py-3 md:py-0 md:h-16 gap-3 md:gap-0">
             
-            {/* Install App Button */}
-            {deferredPrompt && (
-              <button
-                onClick={handleInstallClick}
-                className="p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all animate-pulse"
-                title="安裝應用程式 (Install App)"
-              >
-                <Download size={18} />
-              </button>
-            )}
-
-            {/* Font Size Toggle */}
-            <button
-              onClick={toggleLargeText}
-              className={`p-2.5 rounded-xl transition-all ${
-                isLargeText 
-                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-              title={isLargeText ? "切換至標準字體" : "切換至大字體"}
-            >
-              <Type size={18} />
-            </button>
-
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-              title={isDarkMode ? "切換至亮色模式" : "切換至深色模式"}
-            >
-              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-
-            {user ? (
-              <div className="flex items-center gap-2 md:gap-3">
-                {isAdmin && (
-                  <button
-                    onClick={toggleAdminMode}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-bold transition-all ${
-                      isAdminMode 
-                        ? 'bg-rose-50 text-rose-600 ring-1 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:ring-rose-800' 
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <ShieldCheck size={16} />
-                    <span className="hidden md:inline">{isAdminMode ? '返回儀表板' : '管理員面板'}</span>
-                  </button>
-                )}
+            {/* Top Row (Mobile): Branding & Coffee */}
+            <div className="flex items-center justify-between md:justify-start md:gap-6 w-full md:w-auto">
+              <div className="flex-shrink-0 flex items-center gap-3 group cursor-default">
                 
-                <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800 ml-2">
-                  <div className="relative group">
-                    {user.photoURL ? (
+                <div className="relative">
+                  {!imgError ? (
+                    <div className="bg-white p-0.5 rounded-xl shadow-lg shadow-emerald-500/10 border border-slate-100 dark:border-slate-800 transition-transform group-hover:scale-105 duration-300 overflow-hidden">
                       <img 
-                        className="h-9 w-9 rounded-xl border-2 border-white dark:border-slate-800 shadow-sm object-cover" 
-                        src={user.photoURL} 
-                        alt="User avatar" 
+                        src="/logo.png" 
+                        alt="EV Tracker Logo" 
+                        className="h-9 w-9 object-contain"
+                        onError={() => setImgError(true)}
                       />
-                    ) : (
-                      <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-black">
-                        {user.email?.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <DefaultLogo />
+                  )}
                 </div>
-
-                <button
-                  onClick={logout}
-                  className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
-                  title="登出"
-                >
-                  <LogOut size={18} />
-                </button>
+                
+                <div className="flex flex-col leading-none select-none">
+                  <span className="font-black text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300">
+                    EV Charging Tracker
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 mt-0.5 group-hover:text-emerald-500/80 transition-colors">
+                    馭電智行
+                  </span>
+                </div>
               </div>
-            ) : (
-              <button
-                onClick={loginWithGoogle}
-                className="flex items-center gap-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-white px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm border border-slate-200 dark:border-slate-700 text-sm font-bold"
+
+              {/* Buy Me A Coffee Button */}
+              <a 
+                href="https://buymeacoffee.com/evchargingtracker.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFDD00] text-slate-900 rounded-lg hover:bg-[#FFEA00] transition-all shadow-sm hover:shadow-md active:scale-95 group/coffee"
+                title="請我喝杯咖啡"
               >
-                <GoogleIcon />
-                <span>Google 登入</span>
+                <Coffee size={15} className="stroke-[2.5] text-slate-900 group-hover/coffee:rotate-12 transition-transform" />
+                <span className="hidden sm:inline text-[11px] font-black tracking-wide">Buy me a coffee</span>
+              </a>
+            </div>
+            
+            {/* Bottom Row (Mobile): Controls */}
+            <div className="flex items-center justify-end gap-2 md:gap-4 w-full md:w-auto border-t md:border-t-0 border-slate-100 dark:border-slate-800/50 pt-3 md:pt-0">
+              
+              {/* Share / Install Button */}
+              <button
+                onClick={handleShareClick}
+                className="p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all"
+                title="加入主畫面捷徑 (Add to Home Screen)"
+              >
+                <Share size={18} />
               </button>
-            )}
+
+              {/* Font Size Toggle */}
+              <button
+                onClick={toggleLargeText}
+                className={`p-2.5 rounded-xl transition-all ${
+                  isLargeText 
+                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                title={isLargeText ? "切換至標準字體" : "切換至大字體"}
+              >
+                <Type size={18} />
+              </button>
+
+              {/* Dark Mode Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                title={isDarkMode ? "切換至亮色模式" : "切換至深色模式"}
+              >
+                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+
+              {user ? (
+                <div className="flex items-center gap-2 md:gap-3">
+                  {isAdmin && (
+                    <button
+                      onClick={toggleAdminMode}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-bold transition-all ${
+                        isAdminMode 
+                          ? 'bg-rose-50 text-rose-600 ring-1 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:ring-rose-800' 
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <ShieldCheck size={16} />
+                      <span className="hidden md:inline">{isAdminMode ? '返回儀表板' : '管理員面板'}</span>
+                    </button>
+                  )}
+                  
+                  <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800 ml-2">
+                    <div className="relative group">
+                      {user.photoURL ? (
+                        <img 
+                          className="h-9 w-9 rounded-xl border-2 border-white dark:border-slate-800 shadow-sm object-cover" 
+                          src={user.photoURL} 
+                          alt="User avatar" 
+                        />
+                      ) : (
+                        <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-black">
+                          {user.email?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={logout}
+                    className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                    title="登出"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={loginWithGoogle}
+                  className="flex items-center gap-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-white px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm border border-slate-200 dark:border-slate-700 text-sm font-bold"
+                >
+                  <GoogleIcon />
+                  <span>Google 登入</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Add to Home Screen Modal Instruction */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
+            onClick={() => setShowShareModal(false)} 
+          />
+          
+          {/* Modal Content */}
+          <div className="relative bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-6 md:p-8 space-y-6">
+              <div className="flex items-start justify-between">
+                <div>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white">加入主畫面捷徑</h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">像 App 一樣使用 EV Charging Tracker</p>
+                </div>
+                <button 
+                  onClick={() => setShowShareModal(false)}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* iOS Instruction */}
+                <div className="bg-slate-50 dark:bg-slate-950/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Smartphone size={20} className="text-slate-800 dark:text-white" />
+                    <span className="font-bold text-slate-700 dark:text-slate-200">iOS (Safari)</span>
+                  </div>
+                  <ol className="list-decimal list-outside ml-4 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                    <li>
+                        點擊瀏覽器底部的 <span className="inline-flex items-center justify-center w-6 h-6 bg-slate-200 dark:bg-slate-700 rounded mx-1"><Share size={12} /></span> <strong>分享</strong> 按鈕
+                    </li>
+                    <li>
+                        向下滑動並選擇 <strong>「加入主畫面」</strong> (Add to Home Screen)
+                    </li>
+                  </ol>
+                </div>
+
+                {/* Android Instruction */}
+                <div className="bg-slate-50 dark:bg-slate-950/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-5 h-5 bg-emerald-500 rounded flex items-center justify-center text-white text-[10px] font-bold">A</div>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">Android (Chrome)</span>
+                  </div>
+                  <ol className="list-decimal list-outside ml-4 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                    <li>
+                        點擊瀏覽器右上角的 <span className="inline-flex items-center justify-center w-6 h-6 bg-slate-200 dark:bg-slate-700 rounded mx-1"><Menu size={12} /></span> <strong>選單</strong> 按鈕
+                    </li>
+                    <li>
+                        選擇 <strong>「安裝應用程式」</strong> 或 <strong>「加入主畫面」</strong>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 text-center">
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="text-emerald-600 dark:text-emerald-400 font-bold text-sm hover:underline"
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

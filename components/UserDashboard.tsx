@@ -129,7 +129,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       {/* Redesigned Form Section */}
-      <div className="lg:col-span-1 order-2 lg:order-1">
+      <div className="lg:col-span-1 order-1">
         <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-200/60 dark:border-slate-800 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
           
           <div className="px-8 pt-10 pb-2 flex items-center justify-between">
@@ -329,7 +329,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       </div>
 
       {/* List Section */}
-      <div className="lg:col-span-2 order-1 lg:order-2 space-y-10">
+      <div className="lg:col-span-2 order-2 space-y-10">
         {!loading && records.length > 0 && <UserStats records={statsRecords} />}
         
         <div className="flex items-center gap-4 ml-2">
