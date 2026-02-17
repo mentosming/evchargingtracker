@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User, ChargingRecord } from '../types';
 import { db } from '../services/firebase';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { PlusCircle, MapPin, Gauge, BatteryCharging, Star, FileText, Trash2, Calendar, ChevronDown, Zap, Clock, CreditCard, MessageSquare } from 'lucide-react';
+import { PlusCircle, MapPin, Gauge, BatteryCharging, Star, FileText, Trash2, Calendar, ChevronDown, Zap, Clock, CreditCard, MessageSquare, TrendingUp } from 'lucide-react';
 import UserStats from './UserStats';
 
 interface UserDashboardProps {
@@ -54,6 +54,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     const q = query(collection(db, 'charging_records'), where('uid', '==', user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChargingRecord[];
+      // Sort by timestamp descending (Newest first)
       data.sort((a, b) => b.timestamp - a.timestamp);
       setRecords(data);
       setLoading(false);
@@ -117,6 +118,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     </div>
   );
 
+  // Clone for stats (chronological order)
   const statsRecords = [...records].sort((a, b) => a.timestamp - b.timestamp);
 
   const inputBaseClasses = "flex items-center w-full h-[54px] px-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all duration-300 shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-600 font-bold text-[15px] text-left appearance-none leading-none";
@@ -344,54 +346,76 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
           </div>
         ) : (
           <div className="space-y-6">
-            {records.map((record) => (
-              <div key={record.id} className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200/60 dark:border-slate-800 hover:border-emerald-500/50 transition-all group shadow-sm hover:shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="font-black text-2xl text-slate-800 dark:text-white">{record.location}</h3>
-                      <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center border border-slate-200/50 dark:border-slate-700">
-                        {renderStars(record.rating || 0)}
+            {records.map((record, index) => {
+              // Logic to calculate distance and cost/km
+              const prevRecord = records[index + 1];
+              let traveledDistance = 0;
+              let costPerKm = 0;
+              
+              if (prevRecord && record.odometer > 0 && prevRecord.odometer > 0 && record.odometer > prevRecord.odometer) {
+                traveledDistance = record.odometer - prevRecord.odometer;
+                costPerKm = record.total_amount / traveledDistance;
+              }
+
+              return (
+                <div key={record.id} className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200/60 dark:border-slate-800 hover:border-emerald-500/50 transition-all group shadow-sm hover:shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="font-black text-2xl text-slate-800 dark:text-white">{record.location}</h3>
+                        <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center border border-slate-200/50 dark:border-slate-700">
+                          {renderStars(record.rating || 0)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                        <Calendar size={13} />
+                        {new Date(record.timestamp).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                      <Calendar size={13} />
-                      {new Date(record.timestamp).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })}
+
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">${record.total_amount}</div>
+                        <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mt-2">${record.cost_per_kwh} / KWH</div>
+                      </div>
+                      <button
+                        onClick={() => record.id && handleDelete(record.id)}
+                        className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
+                  
+                  <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                    <RecordStat label="充電電量" value={record.kwh} unit="kWh" />
+                    <RecordStat label="累計里程" value={record.odometer > 0 ? record.odometer : '--'} unit="km" />
+                    <RecordStat 
+                      label="行駛距離" 
+                      value={traveledDistance > 0 ? traveledDistance : '--'} 
+                      unit={traveledDistance > 0 ? "km" : ""} 
+                    />
+                    <RecordStat 
+                      label="每公里成本" 
+                      value={costPerKm > 0 ? `$${costPerKm.toFixed(2)}` : '--'} 
+                      unit={costPerKm > 0 ? "/km" : ""}
+                      highlight={costPerKm > 0} 
+                    />
+                  </div>
 
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">${record.total_amount}</div>
-                      <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mt-2">${record.cost_per_kwh} / KWH</div>
+                  {record.notes && (
+                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+                      <FileText className="shrink-0 text-slate-300" size={16} />
+                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic">
+                        {record.notes}
+                      </p>
                     </div>
-                    <button
-                      onClick={() => record.id && handleDelete(record.id)}
-                      className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+                  )}
                 </div>
-                
-                <div className="mt-8 grid grid-cols-3 gap-6">
-                  <RecordStat label="充電電量" value={record.kwh} unit="kWh" />
-                  <RecordStat label="累計里程" value={record.odometer > 0 ? record.odometer : '--'} unit="km" />
-                  <RecordStat label="計費模式" value={record.mode === 'kWh' ? '計量' : '計時'} unit="" />
-                </div>
-
-                {record.notes && (
-                  <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-                    <FileText className="shrink-0 text-slate-300" size={16} />
-                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic">
-                      {record.notes}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -399,14 +423,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   );
 };
 
-const RecordStat = ({ label, value, unit }: { label: string, value: string | number, unit: string }) => (
+const RecordStat = ({ label, value, unit, highlight = false }: { label: string, value: string | number, unit: string, highlight?: boolean }) => (
   <div className="space-y-2">
     <span className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-0.5">{label}</span>
-    <div className="bg-slate-50/80 dark:bg-slate-950/50 px-4 py-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner flex items-baseline gap-1">
-        <span className="font-black text-slate-700 dark:text-slate-200 text-lg leading-none">
+    <div className={`px-4 py-3.5 rounded-2xl border shadow-inner flex items-baseline gap-1 ${highlight ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800' : 'bg-slate-50/80 dark:bg-slate-950/50 border-slate-100 dark:border-slate-800'}`}>
+        <span className={`font-black text-lg leading-none ${highlight ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
           {value}
         </span>
-        {unit && <small className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{unit}</small>}
+        {unit && <small className={`text-[10px] font-bold uppercase tracking-tighter ${highlight ? 'text-amber-500/70' : 'text-slate-400'}`}>{unit}</small>}
     </div>
   </div>
 );

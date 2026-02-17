@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChargingRecord } from '../types';
-import { BarChart3, TrendingUp, Zap, Map } from 'lucide-react';
+import { BarChart3, TrendingUp, Zap, Map, Coins } from 'lucide-react';
 
 interface UserStatsProps {
   records: ChargingRecord[];
@@ -163,11 +163,18 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
         </div>
       </div>
 
-      <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-y-8 gap-x-6 border-t border-slate-100 dark:border-slate-800/50 pt-10">
+      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-y-8 gap-x-6 border-t border-slate-100 dark:border-slate-800/50 pt-10">
         <SummaryItem icon={<Zap size={16} fill="currentColor" />} label="本月度數" value={`${latestMonth.kwh.toFixed(1)}`} unit="kWh" color="emerald" />
         <SummaryItem icon={<TrendingUp size={16} />} label="充電次數" value={`${latestMonth.count}`} unit="次" color="amber" />
-        <SummaryItem icon={<Map size={16} />} label="累計里程" value={`${latestMonth.distance.toLocaleString()}`} unit="km" color="blue" />
-        <SummaryItem icon={<BarChart3 size={16} />} label="平均單價" value={`${latestMonth.kwh > 0 ? (latestMonth.cost / latestMonth.kwh).toFixed(2) : '0.00'}`} unit="/度" color="emerald" />
+        <SummaryItem icon={<Map size={16} />} label="本月里程" value={`${latestMonth.distance.toLocaleString()}`} unit="km" color="blue" />
+        <SummaryItem icon={<BarChart3 size={16} />} label="平均電價" value={`${latestMonth.kwh > 0 ? (latestMonth.cost / latestMonth.kwh).toFixed(2) : '0.00'}`} unit="/度" color="emerald" />
+        <SummaryItem 
+            icon={<Coins size={16} />} 
+            label="每公里成本" 
+            value={`${latestMonth.distance > 0 ? (latestMonth.cost / latestMonth.distance).toFixed(2) : '0.00'}`} 
+            unit="/km" 
+            color="rose" 
+        />
       </div>
     </div>
   );
@@ -178,6 +185,7 @@ const SummaryItem = ({ icon, label, value, unit, color }: { icon: React.ReactNod
     emerald: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-100/50 dark:border-emerald-800/50",
     amber: "text-amber-600 bg-amber-50 dark:bg-amber-900/30 border-amber-100/50 dark:border-amber-800/50",
     blue: "text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100/50 dark:border-blue-800/50",
+    rose: "text-rose-600 bg-rose-50 dark:bg-rose-900/30 border-rose-100/50 dark:border-rose-800/50",
   };
 
   return (

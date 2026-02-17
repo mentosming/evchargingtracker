@@ -56,8 +56,10 @@ const Navbar: React.FC<NavbarProps> = ({
   return (
     <nav className="glass sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/50 dark:border-slate-800/50 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center gap-6">
+        <div className="flex flex-col md:flex-row justify-center md:justify-between py-3 md:py-0 md:h-16 gap-3 md:gap-0">
+          
+          {/* Top Row (Mobile): Branding & Coffee */}
+          <div className="flex items-center justify-between md:justify-start md:gap-6 w-full md:w-auto">
             <div className="flex-shrink-0 flex items-center gap-3 group cursor-default">
               
               <div className="relative">
@@ -98,7 +100,8 @@ const Navbar: React.FC<NavbarProps> = ({
             </a>
           </div>
           
-          <div className="flex items-center gap-2 md:gap-4">
+          {/* Bottom Row (Mobile): Controls */}
+          <div className="flex items-center justify-end gap-2 md:gap-4 w-full md:w-auto border-t md:border-t-0 border-slate-100 dark:border-slate-800/50 pt-3 md:pt-0">
             
             {/* Font Size Toggle */}
             <button
