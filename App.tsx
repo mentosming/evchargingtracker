@@ -4,8 +4,7 @@ import PublicCalculator from './components/PublicCalculator';
 import UserDashboard from './components/UserDashboard';
 import AdminPanel from './components/AdminPanel';
 import IntroGuide from './components/IntroGuide';
-import { auth } from './services/firebase';
-import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChange } from './services/firebase';
 import { User, ADMIN_EMAIL } from './types';
 
 const App: React.FC = () => {
@@ -17,7 +16,7 @@ const App: React.FC = () => {
 
   // Auth State Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser: FirebaseUser | null) => {
+    const unsubscribe = onAuthStateChange((currentUser) => {
       if (currentUser) {
         setUser({
           uid: currentUser.uid,
@@ -104,10 +103,10 @@ const App: React.FC = () => {
         user={user} 
         isAdminMode={isAdminMode} 
         toggleAdminMode={toggleAdminMode} 
-        isDarkMode={isDarkMode}
-        toggleTheme={toggleTheme}
-        isLargeText={isLargeText}
-        toggleLargeText={toggleLargeText}
+        isDarkMode={isDarkMode} 
+        toggleTheme={toggleTheme} 
+        isLargeText={isLargeText} 
+        toggleLargeText={toggleLargeText} 
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -1,5 +1,11 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // ------------------------------------------------------------------
@@ -18,6 +24,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -42,4 +49,8 @@ export const logout = async () => {
   } catch (error) {
     console.error("Logout failed", error);
   }
+};
+
+export const onAuthStateChange = (callback: (user: any) => void) => {
+  return onAuthStateChanged(auth, callback);
 };

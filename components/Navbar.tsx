@@ -55,27 +55,23 @@ const Navbar: React.FC<NavbarProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
+    // Cast window to any to avoid TypeScript error on non-standard event
     const handler = (e: any) => {
-      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
+    (window as any).addEventListener('beforeinstallprompt', handler);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
+      (window as any).removeEventListener('beforeinstallprompt', handler);
     };
   }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
-    // Show the install prompt
     deferredPrompt.prompt();
-    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
-    // We've used the prompt, and can't use it again, discard it
     setDeferredPrompt(null);
   };
 
@@ -122,19 +118,19 @@ const Navbar: React.FC<NavbarProps> = ({
               title="請我喝杯咖啡"
             >
               <Coffee size={15} className="stroke-[2.5] text-slate-900 group-hover/coffee:rotate-12 transition-transform" />
-              <span className="hidden lg:inline text-[11px] font-black tracking-wide">Buy me a coffee</span>
+              <span className="hidden sm:inline text-[11px] font-black tracking-wide">Buy me a coffee</span>
             </a>
           </div>
           
           {/* Bottom Row (Mobile): Controls */}
           <div className="flex items-center justify-end gap-2 md:gap-4 w-full md:w-auto border-t md:border-t-0 border-slate-100 dark:border-slate-800/50 pt-3 md:pt-0">
             
-            {/* Install App Button (Visible only if installable) */}
+            {/* Install App Button */}
             {deferredPrompt && (
               <button
                 onClick={handleInstallClick}
                 className="p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all animate-pulse"
-                title="安裝到桌面 (Install App)"
+                title="安裝應用程式 (Install App)"
               >
                 <Download size={18} />
               </button>

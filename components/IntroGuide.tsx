@@ -14,7 +14,7 @@ const IntroGuide: React.FC = () => {
               電動車在香港普及速度極快，但配套資訊依然碎片化。EV Charging Tracker 致力於為本地車主提供最直觀、最精準的充電紀錄與數據監測服務。
             </p>
             <p>
-              作為一個獨立開發專案，我希望透過科技優化香港的綠色出行體驗。如果您認同這個工具的價值，歡迎透過 <span className="font-bold text-amber-500 inline-flex items-center">Buy Me a Coffee</span> 給予支持。您的慷慨贊助將確保系統穩定運行，並支持我持續優化針對香港路況與充電網絡的功能。
+              作為一個獨立開發專案，我希望透過科技優化香港的綠色出行體驗。如果您認同這個工具的價值，歡迎透過 <a href="https://buymeacoffee.com/evchargingtracker.com" target="_blank" rel="noopener noreferrer" className="font-bold text-amber-500 inline-flex items-center hover:underline hover:text-amber-600 transition-colors">Buy Me a Coffee</a> 給予支持。您的慷慨贊助將確保系統穩定運行，並支持我持續優化針對香港路況與充電網絡的功能。
             </p>
         </div>
       </div>
