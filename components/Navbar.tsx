@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, ADMIN_EMAIL } from '../types';
 import { loginWithGoogle, logout } from '../services/firebase';
-import { LogOut, ShieldCheck, Moon, Sun, Type, Coffee } from 'lucide-react';
+import { LogOut, ShieldCheck, Moon, Sun, Type, Coffee, Download } from 'lucide-react';
 
 interface NavbarProps {
   user: User | null;
@@ -52,6 +52,32 @@ const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const isAdmin = user?.email === ADMIN_EMAIL;
   const [imgError, setImgError] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    // We've used the prompt, and can't use it again, discard it
+    setDeferredPrompt(null);
+  };
 
   return (
     <nav className="glass sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/50 dark:border-slate-800/50 transition-all duration-300">
@@ -103,6 +129,17 @@ const Navbar: React.FC<NavbarProps> = ({
           {/* Bottom Row (Mobile): Controls */}
           <div className="flex items-center justify-end gap-2 md:gap-4 w-full md:w-auto border-t md:border-t-0 border-slate-100 dark:border-slate-800/50 pt-3 md:pt-0">
             
+            {/* Install App Button (Visible only if installable) */}
+            {deferredPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all animate-pulse"
+                title="安裝到桌面 (Install App)"
+              >
+                <Download size={18} />
+              </button>
+            )}
+
             {/* Font Size Toggle */}
             <button
               onClick={toggleLargeText}
