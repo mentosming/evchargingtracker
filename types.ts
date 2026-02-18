@@ -1,18 +1,20 @@
+
 export interface ChargingRecord {
   id?: string;
   uid: string;
   userEmail: string;
-  timestamp: number; // Stored as timestamp
+  timestamp: number;
   location: string;
-  licensePlate?: string; // 修正：新增車牌欄位
-  duration?: number; // 修正：新增充電時長 (分鐘)
+  licensePlate?: string;
+  duration?: number;
   mode: 'kWh' | 'Time';
   kwh: number;
   total_amount: number;
   cost_per_kwh: number;
   odometer: number;
-  rating?: number; // 1-5 stars
-  notes?: string; // User notes/remarks
+  rating?: number;
+  notes?: string;
+  isFeatured?: boolean; // 新增：是否由管理員發佈至精選社群
 }
 
 export interface User {
@@ -21,6 +23,4 @@ export interface User {
   photoURL: string | null;
 }
 
-// 重要：此 Email 必須與 Firebase Security Rules 中的 Email 一致
-// 否則該帳號將無法讀取所有人的資料，管理員面板將會顯示空白或權限錯誤
 export const ADMIN_EMAIL = 'km520daisy@gmail.com';

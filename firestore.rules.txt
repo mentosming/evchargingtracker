@@ -3,22 +3,25 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /charging_records/{recordId} {
       
-      // Allow creation if user is authenticated
+      // 讀取權限邏輯：
+      // 1. 如果紀錄被標記為精選 (isFeatured == true)，任何人（包括未登入遊客）皆可讀取
+      // 2. 如果是紀錄的擁有者 (uid 匹配)，可以讀取
+      // 3. 如果是管理員，可以讀取
+      allow read: if (resource.data.isFeatured == true) || 
+                   (request.auth != null && (
+                     resource.data.uid == request.auth.uid || 
+                     request.auth.token.email == 'km520daisy@gmail.com'
+                   ));
+
+      // 寫入權限邏輯：
+      // 1. 新增：必須是登入用戶
       allow create: if request.auth != null;
       
-      // Allow read/update/delete if:
-      // 1. The record belongs to the user (uid matches)
-      // OR
-      // 2. The requester is the admin (km520daisy@gmail.com)
-      allow read, update, delete: if request.auth != null && (
+      // 2. 修改/刪除：必須是擁有者或管理員
+      allow update, delete: if request.auth != null && (
         resource.data.uid == request.auth.uid || 
         request.auth.token.email == 'km520daisy@gmail.com'
       );
-      
-      // Special case for list queries (Collection Group queries):
-      // Firestore security rules apply to the *result* of the query.
-      // - Normal user query: where("uid", "==", currentUid) -> Passes 'resource.data.uid == request.auth.uid'
-      // - Admin query: collection() -> Passes 'request.auth.token.email == ...'
     }
   }
 }

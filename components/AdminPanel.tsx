@@ -1,8 +1,9 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { ChargingRecord } from '../types';
 import { db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { Users, Database, Star, Search, FilterX, MapPin, Calendar, Mail, ChevronDown, BarChart3, TrendingUp, Zap } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { Users, Database, Star, Search, FilterX, MapPin, Calendar, Mail, ChevronDown, BarChart3, TrendingUp, Zap, Megaphone, CheckCircle2, Heart } from 'lucide-react';
 
 const AdminPanel: React.FC = () => {
   const [records, setRecords] = useState<ChargingRecord[]>([]);
@@ -14,14 +15,14 @@ const AdminPanel: React.FC = () => {
   const [filterMonth, setFilterMonth] = useState('all');
 
   useEffect(() => {
-    // Admin Query: Fetch ALL records system-wide
     const q = query(
       collection(db, 'charging_records'),
       orderBy('timestamp', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
+    // Fix: Explicitly cast snapshot and doc to any to resolve Firebase Modular SDK type ambiguity
+    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+      const data = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       })) as ChargingRecord[];
@@ -32,7 +33,18 @@ const AdminPanel: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Global Statistics (System Wide)
+  const handleToggleFeature = async (recordId: string, currentStatus: boolean) => {
+    try {
+      const recordRef = doc(db, 'charging_records', recordId);
+      await updateDoc(recordRef, {
+        isFeatured: !currentStatus
+      });
+    } catch (error) {
+      console.error("Error toggling feature status:", error);
+      alert("更新狀態失敗");
+    }
+  };
+
   const globalStats = useMemo(() => {
     const totalKwh = records.reduce((acc, curr) => acc + (curr.kwh || 0), 0);
     const totalRevenue = records.reduce((acc, curr) => acc + (curr.total_amount || 0), 0);
@@ -40,7 +52,6 @@ const AdminPanel: React.FC = () => {
     return { totalKwh, totalRevenue, uniqueUsers };
   }, [records]);
 
-  // Derived Filter Options
   const uniqueUserEmails = useMemo(() => {
     const emails = new Set(records.map(r => r.userEmail));
     return Array.from(emails).sort();
@@ -57,7 +68,6 @@ const AdminPanel: React.FC = () => {
     return Array.from(months.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [records]);
 
-  // Filtering Logic
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       const searchStr = searchQuery.toLowerCase();
@@ -73,7 +83,6 @@ const AdminPanel: React.FC = () => {
     });
   }, [records, searchQuery, filterEmail, filterMonth]);
 
-  // User List with counts
   const userList = useMemo(() => {
     const users = new Map<string, { count: number, lastActive: number }>();
     records.forEach(r => {
@@ -97,7 +106,6 @@ const AdminPanel: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* 系統概覽卡片 */}
       <div className="bg-slate-900 rounded-[32px] p-8 border border-slate-800 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-10">
           <Database size={120} className="text-emerald-500" />
@@ -123,7 +131,6 @@ const AdminPanel: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* 左側：使用者清單 (可點擊篩選) */}
         <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-fit lg:sticky lg:top-24">
           <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -148,14 +155,12 @@ const AdminPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* 右側：數據過濾與表格 */}
         <div className="lg:col-span-3 space-y-6">
-          {/* 篩選工具列 */}
           <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Search size={16} className="text-emerald-500" />
-                <span className="text-xs font-black uppercase tracking-widest text-slate-400">全域數據過濾 Global Filters</span>
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">數據篩選 Filters</span>
               </div>
               { (searchQuery || filterEmail !== 'all' || filterMonth !== 'all') && (
                 <button 
@@ -211,7 +216,6 @@ const AdminPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* 表格主體 */}
           <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex justify-between items-center">
               <div className="flex items-center gap-2">
@@ -219,7 +223,7 @@ const AdminPanel: React.FC = () => {
                 <h3 className="font-black text-sm text-slate-800 dark:text-white uppercase tracking-wider">全域紀錄清單</h3>
               </div>
               <div className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-500/20">
-                Filtered: {filteredRecords.length} / {records.length}
+                篩選結果: {filteredRecords.length}
               </div>
             </div>
             
@@ -228,11 +232,11 @@ const AdminPanel: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-50/80 dark:bg-slate-950/80 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                     <th className="px-6 py-4">日期時間</th>
-                    <th className="px-6 py-4">使用者 Email</th>
+                    <th className="px-6 py-4">使用者</th>
+                    <th className="px-6 py-4 text-center">精選狀態</th>
                     <th className="px-6 py-4">地點 / 車牌</th>
                     <th className="px-6 py-4 text-center">滿意度</th>
-                    <th className="px-6 py-4 text-right">交易金額</th>
-                    <th className="px-6 py-4">備註</th>
+                    <th className="px-6 py-4 text-right">金額</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -254,9 +258,22 @@ const AdminPanel: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer truncate max-w-[160px]" onClick={() => setFilterEmail(r.userEmail)}>
+                          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer truncate max-w-[140px]" onClick={() => setFilterEmail(r.userEmail)}>
                             {r.userEmail}
                           </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            onClick={() => r.id && handleToggleFeature(r.id, !!r.isFeatured)}
+                            className={`p-2.5 rounded-xl transition-all ${
+                              r.isFeatured 
+                                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 ring-1 ring-amber-500/20' 
+                                : 'bg-slate-100 text-slate-300 dark:bg-slate-800 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50'
+                            }`}
+                            title={r.isFeatured ? "撤回精選" : "推薦至實測精選"}
+                          >
+                            {r.isFeatured ? <Heart size={18} fill="currentColor" /> : <Heart size={18} />}
+                          </button>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
@@ -276,12 +293,6 @@ const AdminPanel: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="text-sm font-black text-slate-900 dark:text-white">${r.total_amount}</div>
-                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">${r.cost_per_kwh}/kWh</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium italic truncate max-w-[140px]" title={r.notes}>
-                            {r.notes || '-'}
-                          </div>
                         </td>
                       </tr>
                     ))

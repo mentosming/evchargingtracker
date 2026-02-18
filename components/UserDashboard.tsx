@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, ChargingRecord } from '../types';
 import { db } from '../services/firebase';
@@ -79,8 +80,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     if (!user.uid) return;
     setLoading(true);
     const q = query(collection(db, 'charging_records'), where('uid', '==', user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ChargingRecord[];
+    // Fix: Using any for snapshot to resolve type mismatch in Firebase Modular SDK onSnapshot overload
+    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+      const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as ChargingRecord[];
       data.sort((a, b) => b.timestamp - a.timestamp);
       setRecords(data);
       setLoading(false);

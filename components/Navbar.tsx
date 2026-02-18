@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, ADMIN_EMAIL } from '../types';
 import { loginWithGoogle, logout } from '../services/firebase';
-import { LogOut, ShieldCheck, Moon, Sun, Type, Coffee, Share, X, Smartphone, Menu } from 'lucide-react';
+import { LogOut, ShieldCheck, Moon, Sun, Type, Coffee, Share, X, Smartphone, Menu, Sparkles } from 'lucide-react';
+import CommunityFeed from './CommunityFeed';
 
 interface NavbarProps {
   user: User | null;
@@ -22,7 +24,12 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// Fallback Logo (Battery + Lightning)
+const ThreadsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M15.46 9.42c-.08-.04-.16-.08-.25-.12C15.06 6.53 13.57 5.11 11.23 5.11 8.5 5.11 6.57 7.15 6.57 10.19c0 3.04 1.93 5.08 4.66 5.08 1.6 0 2.9-.81 3.59-2.3.05-.1.17-.14.27-.09l.76.41c.09.05.13.17.08.26-.9 1.63-2.65 2.74-4.7 2.74-3.37 0-5.83-2.63-5.83-6.1s2.46-6.1 5.83-6.1c3.06 0 4.81 1.86 4.98 4.96.06.01.12.02.18.03.1.02.16.11.14.21l-.15.74c-.02.09-.11.16-.21.14-.04-.01-.09-.02-.13-.03v.28c0 1.98-1.2 2.99-2.7 2.99-1.06 0-1.92-.66-1.92-1.89v-1.14c0-1.23.86-1.89 1.92-1.89.77 0 1.38.33 1.69.83.1.04.2.09.3.14v-.28c-.08-.04-.16-.08-.24-.12V9.42zm-1.98 3.34c.94 0 1.55-.63 1.55-2.1v-.39c-.33-.41-.87-.66-1.55-.66-.45 0-.76.28-.76 1s.31 1 1.76 1v1.15z"/>
+  </svg>
+);
+
 const DefaultLogo = () => (
   <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="shadow-lg shadow-emerald-500/20 rounded-xl transition-transform group-hover:scale-105 duration-300">
     <defs>
@@ -32,11 +39,8 @@ const DefaultLogo = () => (
       </linearGradient>
     </defs>
     <rect width="40" height="40" rx="12" fill="url(#logoGradient)" />
-    {/* Battery Body */}
     <rect x="11" y="12" width="18" height="20" rx="2" stroke="white" strokeWidth="2.5" />
-    {/* Battery Cap */}
     <path d="M16 12V9C16 8.44772 16.4477 8 17 8H23C23.5523 8 24 8.44772 24 9V12" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-    {/* Lightning Bolt */}
     <path d="M22 17L16 23H20L18 29L24 23H20L22 17Z" fill="white" />
   </svg>
 );
@@ -54,35 +58,29 @@ const Navbar: React.FC<NavbarProps> = ({
   const [imgError, setImgError] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showCommunityFeed, setShowCommunityFeed] = useState(false);
 
   useEffect(() => {
-    // Cast window to any to avoid TypeScript error on non-standard event
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
-
-    (window as any).addEventListener('beforeinstallprompt', handler);
-
-    return () => {
-      (window as any).removeEventListener('beforeinstallprompt', handler);
-    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setShowShareModal(false);
   };
 
   const handleShareClick = () => {
-    // Priority 1: If native install prompt is available, use it
     if (deferredPrompt) {
         handleInstallClick();
     } else {
-        // Priority 2: Show instructions modal
         setShowShareModal(true);
     }
   };
@@ -93,10 +91,8 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-center md:justify-between py-3 md:py-0 md:h-16 gap-3 md:gap-0">
             
-            {/* Top Row (Mobile): Branding & Coffee */}
             <div className="flex items-center justify-between md:justify-start md:gap-6 w-full md:w-auto">
               <div className="flex-shrink-0 flex items-center gap-3 group cursor-default">
-                
                 <div className="relative">
                   {!imgError ? (
                     <div className="bg-white p-0.5 rounded-xl shadow-lg shadow-emerald-500/10 border border-slate-100 dark:border-slate-800 transition-transform group-hover:scale-105 duration-300 overflow-hidden">
@@ -122,23 +118,46 @@ const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
 
-              {/* Buy Me A Coffee Button */}
-              <a 
-                href="https://buymeacoffee.com/evchargingtracker.com" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFDD00] text-slate-900 rounded-lg hover:bg-[#FFEA00] transition-all shadow-sm hover:shadow-md active:scale-95 group/coffee"
-                title="請我喝杯咖啡"
-              >
-                <Coffee size={15} className="stroke-[2.5] text-slate-900 group-hover/coffee:rotate-12 transition-transform" />
-                <span className="hidden sm:inline text-[11px] font-black tracking-wide">Buy me a coffee</span>
-              </a>
+              <div className="flex items-center gap-2">
+                <a 
+                  href="https://www.threads.net/@evchargingtracker?igshid=NTc4MTIwNjQ2YQ==" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg hover:opacity-90 transition-all shadow-sm hover:shadow-md active:scale-95 group/threads"
+                  title="追蹤我們的 Threads"
+                >
+                  <ThreadsIcon />
+                  <span className="hidden sm:inline text-[11px] font-black tracking-wide">Threads</span>
+                </a>
+
+                <a 
+                  href="https://buymeacoffee.com/evchargingtracker.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFDD00] text-slate-900 rounded-lg hover:bg-[#FFEA00] transition-all shadow-sm hover:shadow-md active:scale-95 group/coffee"
+                  title="請我喝杯咖啡"
+                >
+                  <Coffee size={15} className="stroke-[2.5] text-slate-900 group-hover/coffee:rotate-12 transition-transform" />
+                  <span className="hidden sm:inline text-[11px] font-black tracking-wide">Buy me a coffee</span>
+                </a>
+              </div>
             </div>
             
-            {/* Bottom Row (Mobile): Controls */}
             <div className="flex items-center justify-end gap-2 md:gap-4 w-full md:w-auto border-t md:border-t-0 border-slate-100 dark:border-slate-800/50 pt-3 md:pt-0">
               
-              {/* Share / Install Button */}
+              {/* 社群精選體驗按鈕 (所有人可見) */}
+              <button
+                onClick={() => setShowCommunityFeed(true)}
+                className="relative p-2.5 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all group"
+                title="社群精選體驗 (Admin Picks)"
+              >
+                <Sparkles size={18} />
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                </span>
+              </button>
+
               <button
                 onClick={handleShareClick}
                 className="p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all"
@@ -147,7 +166,6 @@ const Navbar: React.FC<NavbarProps> = ({
                 <Share size={18} />
               </button>
 
-              {/* Font Size Toggle */}
               <button
                 onClick={toggleLargeText}
                 className={`p-2.5 rounded-xl transition-all ${
@@ -160,7 +178,6 @@ const Navbar: React.FC<NavbarProps> = ({
                 <Type size={18} />
               </button>
 
-              {/* Dark Mode Toggle */}
               <button
                 onClick={toggleTheme}
                 className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
@@ -223,16 +240,17 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
       </nav>
 
-      {/* Add to Home Screen Modal Instruction */}
+      {/* Community Feed Modal */}
+      {showCommunityFeed && (
+        <CommunityFeed onClose={() => setShowCommunityFeed(false)} />
+      )}
+
       {showShareModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
-          {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
             onClick={() => setShowShareModal(false)} 
           />
-          
-          {/* Modal Content */}
           <div className="relative bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="p-6 md:p-8 space-y-6">
               <div className="flex items-start justify-between">
@@ -249,7 +267,6 @@ const Navbar: React.FC<NavbarProps> = ({
               </div>
 
               <div className="space-y-4">
-                {/* iOS Instruction */}
                 <div className="bg-slate-50 dark:bg-slate-950/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
                   <div className="flex items-center gap-3 mb-3">
                     <Smartphone size={20} className="text-slate-800 dark:text-white" />
@@ -265,7 +282,6 @@ const Navbar: React.FC<NavbarProps> = ({
                   </ol>
                 </div>
 
-                {/* Android Instruction */}
                 <div className="bg-slate-50 dark:bg-slate-950/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-5 h-5 bg-emerald-500 rounded flex items-center justify-center text-white text-[10px] font-bold">A</div>

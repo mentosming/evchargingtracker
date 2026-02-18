@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { ChargingRecord } from '../types';
 import { BarChart3, TrendingUp, Zap, Map, Coins } from 'lucide-react';
@@ -163,7 +164,7 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
         </div>
       </div>
 
-      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-y-8 gap-x-6 border-t border-slate-100 dark:border-slate-800/50 pt-10">
+      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-y-8 gap-x-2 border-t border-slate-100 dark:border-slate-800/50 pt-10">
         <SummaryItem icon={<Zap size={16} fill="currentColor" />} label="本月度數" value={`${latestMonth.kwh.toFixed(1)}`} unit="kWh" color="emerald" />
         <SummaryItem icon={<TrendingUp size={16} />} label="充電次數" value={`${latestMonth.count}`} unit="次" color="amber" />
         <SummaryItem icon={<Map size={16} />} label="本月里程" value={`${latestMonth.distance.toLocaleString()}`} unit="km" color="blue" />
@@ -189,14 +190,19 @@ const SummaryItem = ({ icon, label, value, unit, color }: { icon: React.ReactNod
   };
 
   return (
-    <div className="flex items-center gap-4 group">
-      <div className={`p-3 rounded-2xl border transition-transform group-hover:scale-110 ${colors[color] || colors.emerald}`}>
+    <div className="flex items-center gap-3 group">
+      <div className={`p-3 rounded-2xl border transition-transform group-hover:scale-110 flex-shrink-0 ${colors[color] || colors.emerald}`}>
         {icon}
       </div>
       <div className="min-w-0 flex flex-col justify-center">
-        <div className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-[0.15em] mb-0.5">{label}</div>
-        <div className="text-xl font-black text-slate-800 dark:text-white truncate leading-tight">
-          {value}<small className="ml-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">{unit}</small>
+        <div className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-[0.15em] mb-0.5 whitespace-nowrap">{label}</div>
+        <div className="flex items-baseline gap-0.5">
+          <span className="text-xl font-black text-slate-800 dark:text-white tracking-tight leading-none">
+            {value}
+          </span>
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 whitespace-nowrap">
+            {unit}
+          </span>
         </div>
       </div>
     </div>
