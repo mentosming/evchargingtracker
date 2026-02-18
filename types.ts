@@ -4,6 +4,8 @@ export interface ChargingRecord {
   userEmail: string;
   timestamp: number; // Stored as timestamp
   location: string;
+  licensePlate?: string; // 修正：新增車牌欄位
+  duration?: number; // 修正：新增充電時長 (分鐘)
   mode: 'kWh' | 'Time';
   kwh: number;
   total_amount: number;
