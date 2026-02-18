@@ -1,3 +1,4 @@
+
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
@@ -34,12 +35,35 @@ export const loginWithGoogle = async () => {
     await signInWithPopup(auth, googleProvider);
   } catch (error: any) {
     console.error("Login failed", error);
-    // 友善的錯誤提示
+    
+    // 忽略使用者主動關閉彈窗的操作，不需報錯
+    if (error.code === 'auth/popup-closed-by-user') return;
+
+    let msg = `登入失敗 (${error.code})：請稍後再試。`;
+
     if (error.code === 'auth/configuration-not-found' || error.code === 'auth/api-key-not-valid') {
-        alert("Firebase 設定錯誤：請檢查 services/firebase.ts 中的 apiKey 與 projectId 是否正確。");
-    } else {
-        alert(`登入失敗 (${error.code})：請檢查網路連線或 Firebase Console 設定。`);
+        msg = "Firebase 設定錯誤：\n請檢查 services/firebase.ts 中的 apiKey 與 projectId 是否正確。";
+    } else if (error.code === 'auth/network-request-failed') {
+        // 這是最常見的錯誤，通常是因為網域未加入白名單導致 CORS 失敗，被瀏覽器視為網路錯誤
+        msg = "無法連線至驗證伺服器 (Network Request Failed)\n\n" +
+              "常見原因與解決方法：\n" +
+              "1. 【網域未授權】：若您正在使用新網址 (如 *.run.app)，請務必至 Firebase Console > Authentication > Settings > Authorized Domains 新增此網域。\n" +
+              "2. 【網路問題】：請檢查您的網路連線是否正常。\n" +
+              "3. 【瀏覽器阻擋】：請嘗試關閉擋廣告插件或使用無痕模式測試。";
+    } else if (error.code === 'auth/unauthorized-domain') {
+        msg = "網域未授權 (Unauthorized Domain)\n\n" +
+              "Firebase 拒絕了來自此網域的請求。\n" +
+              "請至 Firebase Console > Authentication > Settings > Authorized Domains\n" +
+              "將目前的網址新增至白名單中。";
+    } else if (error.code === 'auth/operation-not-allowed') {
+        msg = "登入方式未啟用 (Operation Not Allowed)\n\n" +
+              "請至 Firebase Console > Authentication > Sign-in method\n" +
+              "啟用 Google 登入提供者 (Google Sign-in provider)。";
+    } else if (error.code === 'auth/popup-blocked') {
+        msg = "彈出式視窗被封鎖\n\n請允許瀏覽器顯示彈出式視窗以進行登入驗證。";
     }
+
+    alert(msg);
   }
 };
 
