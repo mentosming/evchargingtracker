@@ -40,7 +40,7 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
     const grouped = recordsWithDistance.reduce((acc, record) => {
       const date = new Date(record.timestamp);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
+
       if (!acc[key]) {
         acc[key] = {
           key,
@@ -51,12 +51,12 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
           distance: 0,
         };
       }
-      
+
       acc[key].kwh += record.kwh;
       acc[key].cost += record.total_amount;
       acc[key].count += 1;
       acc[key].distance += record.tripDistance;
-      
+
       return acc;
     }, {} as Record<string, MonthlyData>);
 
@@ -84,25 +84,23 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Statistical Insights</p>
           </div>
         </div>
-        
+
         <div className="flex bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl w-full sm:w-auto border border-slate-200/50 dark:border-slate-800 shadow-inner">
           <button
             onClick={() => setActiveTab('energy')}
-            className={`flex-1 sm:px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-              activeTab === 'energy' 
-                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-md scale-[1.02]' 
+            className={`flex-1 sm:px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'energy'
+                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-md scale-[1.02]'
                 : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
+              }`}
           >
             Energy
           </button>
           <button
             onClick={() => setActiveTab('distance')}
-            className={`flex-1 sm:px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-              activeTab === 'distance' 
-                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-md scale-[1.02]' 
+            className={`flex-1 sm:px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'distance'
+                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-md scale-[1.02]'
                 : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
+              }`}
           >
             Distance
           </button>
@@ -117,42 +115,41 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
               (activeTab === 'energy' ? item.kwh / maxKwh : item.distance / maxDistance) * 100,
               5
             );
-            
+
             const badgeBottomPos = Math.max((item.count / maxCount) * 85, 5);
-            
+
             return (
               <div key={item.key} className="relative flex-1 flex flex-col items-center group h-full justify-end">
                 {/* Tooltip on Hover */}
                 <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-all transform group-hover:-translate-y-1 bg-slate-900 text-white text-[11px] font-black rounded-xl px-3 py-2 pointer-events-none whitespace-nowrap z-30 shadow-2xl">
                   {activeTab === 'energy' ? `${item.kwh.toFixed(1)} kWh` : `${item.distance.toLocaleString()} km`}
                 </div>
-                
+
                 <div className="relative w-full max-w-[60px] h-full flex items-end">
-                    {/* The "Track" */}
-                    <div className="absolute inset-0 bg-slate-100 dark:bg-slate-950 rounded-2xl mx-1 shadow-inner border border-slate-200/30 dark:border-slate-800/50" />
-                    
-                    {/* The Bar */}
-                    <div 
-                      className={`w-full mx-1 rounded-t-2xl transition-all duration-1000 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:brightness-110 group-hover:scale-x-105 border-x border-t border-emerald-600/10 dark:border-white/5 relative z-10 ${
-                        activeTab === 'energy' 
-                          ? 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_4px_15px_rgba(16,185,129,0.2)]' 
-                          : 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-teal-400 shadow-[0_4px_15px_rgba(20,184,166,0.2)]'
+                  {/* The "Track" */}
+                  <div className="absolute inset-0 bg-slate-100 dark:bg-slate-950 rounded-2xl mx-1 shadow-inner border border-slate-200/30 dark:border-slate-800/50" />
+
+                  {/* The Bar */}
+                  <div
+                    className={`w-full mx-1 rounded-t-2xl transition-all duration-1000 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:brightness-110 group-hover:scale-x-105 border-x border-t border-emerald-600/10 dark:border-white/5 relative z-10 ${activeTab === 'energy'
+                        ? 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_4px_15px_rgba(16,185,129,0.2)]'
+                        : 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-teal-400 shadow-[0_4px_15px_rgba(20,184,166,0.2)]'
                       }`}
-                      style={{ height: `${barHeightPct}%` }}
+                    style={{ height: `${barHeightPct}%` }}
+                  >
+                    {/* Gloss Reflection */}
+                    <div className="absolute inset-x-0 top-0 h-4 bg-white/20 rounded-t-2xl blur-[1px]" />
+                  </div>
+
+                  {/* Count Marker */}
+                  {activeTab === 'energy' && (
+                    <div
+                      className="absolute w-8 h-8 bg-white dark:bg-slate-800 border-[3px] border-amber-400 dark:border-amber-500 rounded-full flex items-center justify-center text-[10px] font-black text-amber-600 dark:text-amber-400 shadow-lg left-1/2 -translate-x-1/2 transition-all duration-1000 z-20 group-hover:scale-125"
+                      style={{ bottom: `calc(${badgeBottomPos}% - 16px)` }}
                     >
-                      {/* Gloss Reflection */}
-                      <div className="absolute inset-x-0 top-0 h-4 bg-white/20 rounded-t-2xl blur-[1px]" />
+                      {item.count}
                     </div>
-                    
-                    {/* Count Marker */}
-                    {activeTab === 'energy' && (
-                      <div 
-                          className="absolute w-8 h-8 bg-white dark:bg-slate-800 border-[3px] border-amber-400 dark:border-amber-500 rounded-full flex items-center justify-center text-[10px] font-black text-amber-600 dark:text-amber-400 shadow-lg left-1/2 -translate-x-1/2 transition-all duration-1000 z-20 group-hover:scale-125"
-                          style={{ bottom: `calc(${badgeBottomPos}% - 16px)` }}
-                      >
-                          {item.count}
-                      </div>
-                    )}
+                  )}
                 </div>
 
                 <div className="mt-6 text-[10px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em]">
@@ -164,17 +161,24 @@ const UserStats: React.FC<UserStatsProps> = ({ records }) => {
         </div>
       </div>
 
-      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-y-8 gap-x-2 border-t border-slate-100 dark:border-slate-800/50 pt-10">
+      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-y-8 gap-x-2 border-t border-slate-100 dark:border-slate-800/50 pt-10">
         <SummaryItem icon={<Zap size={16} fill="currentColor" />} label="本月度數" value={`${latestMonth.kwh.toFixed(1)}`} unit="kWh" color="emerald" />
         <SummaryItem icon={<TrendingUp size={16} />} label="充電次數" value={`${latestMonth.count}`} unit="次" color="amber" />
         <SummaryItem icon={<Map size={16} />} label="本月里程" value={`${latestMonth.distance.toLocaleString()}`} unit="km" color="blue" />
         <SummaryItem icon={<BarChart3 size={16} />} label="平均電價" value={`${latestMonth.kwh > 0 ? (latestMonth.cost / latestMonth.kwh).toFixed(2) : '0.00'}`} unit="/度" color="emerald" />
-        <SummaryItem 
-            icon={<Coins size={16} />} 
-            label="每公里成本" 
-            value={`${latestMonth.distance > 0 ? (latestMonth.cost / latestMonth.distance).toFixed(2) : '0.00'}`} 
-            unit="/km" 
-            color="rose" 
+        <SummaryItem
+          icon={<Coins size={16} />}
+          label="每公里成本"
+          value={`${latestMonth.distance > 0 ? (latestMonth.cost / latestMonth.distance).toFixed(2) : '0.00'}`}
+          unit="/km"
+          color="rose"
+        />
+        <SummaryItem
+          icon={<Zap size={16} />}
+          label="平均電耗"
+          value={`${latestMonth.distance > 0 && latestMonth.kwh > 0 ? (latestMonth.distance / latestMonth.kwh).toFixed(2) : '0.00'}`}
+          unit="km/kWh"
+          color="blue"
         />
       </div>
     </div>

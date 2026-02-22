@@ -3,7 +3,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ChargingRecord } from '../types';
 import { db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
-import { Users, Database, Star, Search, FilterX, MapPin, Calendar, Mail, ChevronDown, BarChart3, TrendingUp, Zap, Megaphone, CheckCircle2, Heart } from 'lucide-react';
+import { Users, Database, Star, Search, FilterX, MapPin, Calendar, Mail, ChevronDown, BarChart3, TrendingUp, Zap, CheckCircle2, Heart, Clock, BatteryCharging, Gauge, FileText, Activity } from 'lucide-react';
+
 
 const AdminPanel: React.FC = () => {
   const [records, setRecords] = useState<ChargingRecord[]>([]);
@@ -71,10 +72,10 @@ const AdminPanel: React.FC = () => {
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       const searchStr = searchQuery.toLowerCase();
-      const matchesSearch = r.location.toLowerCase().includes(searchStr) || 
-                            r.userEmail.toLowerCase().includes(searchStr);
+      const matchesSearch = r.location.toLowerCase().includes(searchStr) ||
+        r.userEmail.toLowerCase().includes(searchStr);
       const matchesEmail = filterEmail === 'all' || r.userEmail === filterEmail;
-      
+
       const recordDate = new Date(r.timestamp);
       const recordMonthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`;
       const matchesMonth = filterMonth === 'all' || recordMonthKey === filterMonth;
@@ -97,6 +98,44 @@ const AdminPanel: React.FC = () => {
       .sort((a, b) => b.lastActive - a.lastActive);
   }, [records]);
 
+  // 新增：圖表資料 (用戶成長趨勢)
+  const growthData = useMemo(() => {
+    // 找出每個用戶的首次出現時間
+    const firstSeen = new Map<string, number>();
+    records.forEach(r => {
+      if (!firstSeen.has(r.userEmail) || r.timestamp < firstSeen.get(r.userEmail)!) {
+        firstSeen.set(r.userEmail, r.timestamp);
+      }
+    });
+
+    const monthlyCounts = new Map<string, number>();
+    firstSeen.forEach(timestamp => {
+      const date = new Date(timestamp);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthlyCounts.set(key, (monthlyCounts.get(key) || 0) + 1);
+    });
+
+    // 填補最近 6 個月的空缺，並計算累積
+    const data: { label: string; newUsers: number; totalUsers: number }[] = [];
+    let cumulative = 0;
+
+    // 只取有資料的月份進行累加，然後取最後6筆
+    const sortedKeys = Array.from(monthlyCounts.keys()).sort();
+    sortedKeys.forEach(key => {
+      const count = monthlyCounts.get(key)!;
+      cumulative += count;
+      const [year, month] = key.split('-');
+      data.push({
+        label: `${parseInt(month)}月`,
+        newUsers: count,
+        totalUsers: cumulative
+      });
+    });
+
+    return data.slice(-6); // 顯示最近有數據的 6 個月
+  }, [records]);
+
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-32 space-y-4">
       <div className="animate-spin h-12 w-12 border-4 border-emerald-500 border-t-transparent rounded-full"></div>
@@ -110,7 +149,7 @@ const AdminPanel: React.FC = () => {
         <div className="absolute top-0 right-0 p-8 opacity-10">
           <Database size={120} className="text-emerald-500" />
         </div>
-        
+
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
@@ -121,7 +160,7 @@ const AdminPanel: React.FC = () => {
               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-500 mt-0.5">System Administration</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <AdminStatCard label="總充電度數" value={globalStats.totalKwh.toFixed(1)} unit="kWh" icon={<Zap className="text-emerald-400" size={18} />} />
             <AdminStatCard label="總交易金額" value={`$${globalStats.totalRevenue.toLocaleString()}`} unit="HKD" icon={<BarChart3 className="text-amber-400" size={18} />} />
@@ -140,14 +179,14 @@ const AdminPanel: React.FC = () => {
           </div>
           <div className="max-h-[60vh] overflow-y-auto">
             {userList.map((u, idx) => (
-              <button 
-                key={idx} 
+              <button
+                key={idx}
                 onClick={() => setFilterEmail(u.email)}
                 className={`w-full text-left p-4 border-b border-slate-50 dark:border-slate-800 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-900/10 group ${filterEmail === u.email ? 'bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-inset ring-emerald-500/30' : ''}`}
               >
                 <div className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400">{u.email}</div>
                 <div className="flex justify-between mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  <span className="flex items-center gap-1"><Database size={10}/> {u.count} 筆</span>
+                  <span className="flex items-center gap-1"><Database size={10} /> {u.count} 筆</span>
                   <span>{new Date(u.lastActive).toLocaleDateString()}</span>
                 </div>
               </button>
@@ -162,16 +201,16 @@ const AdminPanel: React.FC = () => {
                 <Search size={16} className="text-emerald-500" />
                 <span className="text-xs font-black uppercase tracking-widest text-slate-400">數據篩選 Filters</span>
               </div>
-              { (searchQuery || filterEmail !== 'all' || filterMonth !== 'all') && (
-                <button 
-                  onClick={() => {setSearchQuery(''); setFilterEmail('all'); setFilterMonth('all');}}
+              {(searchQuery || filterEmail !== 'all' || filterMonth !== 'all') && (
+                <button
+                  onClick={() => { setSearchQuery(''); setFilterEmail('all'); setFilterMonth('all'); }}
                   className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 transition-colors"
                 >
                   <FilterX size={14} /> 重置
                 </button>
               )}
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative group">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={16} />
@@ -226,17 +265,23 @@ const AdminPanel: React.FC = () => {
                 篩選結果: {filteredRecords.length}
               </div>
             </div>
-            
+
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50/80 dark:bg-slate-950/80 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                    <th className="px-6 py-4">日期時間</th>
-                    <th className="px-6 py-4">使用者</th>
-                    <th className="px-6 py-4 text-center">精選狀態</th>
-                    <th className="px-6 py-4">地點 / 車牌</th>
-                    <th className="px-6 py-4 text-center">滿意度</th>
-                    <th className="px-6 py-4 text-right">金額</th>
+                    <th className="px-5 py-4 min-w-[120px]">日期時間</th>
+                    <th className="px-5 py-4 min-w-[140px]">用戶</th>
+                    <th className="px-5 py-4 min-w-[120px]">地點</th>
+                    <th className="px-5 py-4 text-center">車牌</th>
+                    <th className="px-5 py-4 text-center">模式</th>
+                    <th className="px-5 py-4 text-right">電量(kWh)</th>
+                    <th className="px-5 py-4 text-right">總額(HKD)</th>
+                    <th className="px-5 py-4 text-right">單價($/kWh)</th>
+                    <th className="px-5 py-4 text-right min-w-[100px]">里程(km)</th>
+                    <th className="px-5 py-4 text-center min-w-[100px]">時長(mins)</th>
+                    <th className="px-5 py-4 min-w-[150px]">備註</th>
+                    <th className="px-5 py-4 text-center sticky right-0 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur z-10 w-24">體驗</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -252,47 +297,69 @@ const AdminPanel: React.FC = () => {
                   ) : (
                     filteredRecords.map((r) => (
                       <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-950 transition-colors group">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-5 py-4 whitespace-nowrap">
                           <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
                             {new Date(r.timestamp).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-4">
                           <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer truncate max-w-[140px]" onClick={() => setFilterEmail(r.userEmail)}>
                             {r.userEmail}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => r.id && handleToggleFeature(r.id, !!r.isFeatured)}
-                            className={`p-2.5 rounded-xl transition-all ${
-                              r.isFeatured 
-                                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 ring-1 ring-amber-500/20' 
-                                : 'bg-slate-100 text-slate-300 dark:bg-slate-800 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50'
-                            }`}
-                            title={r.isFeatured ? "撤回精選" : "推薦至實測精選"}
-                          >
-                            {r.isFeatured ? <Heart size={18} fill="currentColor" /> : <Heart size={18} />}
-                          </button>
+                        <td className="px-5 py-4">
+                          <span className="text-xs font-black text-slate-800 dark:text-white truncate block max-w-[120px]" title={r.location}>{r.location}</span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-black text-slate-800 dark:text-white truncate max-w-[120px]">{r.location}</span>
-                            {r.licensePlate && (
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">🚗 {r.licensePlate}</span>
-                            )}
-                          </div>
+                        <td className="px-5 py-4 text-center">
+                          {r.licensePlate ? (
+                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-800 uppercase block whitespace-nowrap mx-auto w-fit">
+                              {r.licensePlate}
+                            </span>
+                          ) : <span className="text-slate-300 dark:text-slate-700">-</span>}
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          {r.rating ? (
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-500 rounded-md border border-amber-100 dark:border-amber-900/50">
-                               <span className="text-[10px] font-black">{r.rating}</span>
-                               <Star size={10} fill="currentColor" />
+                        <td className="px-5 py-4 text-center">
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${r.mode === 'Time' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>
+                            {r.mode}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-right text-xs font-black text-slate-700 dark:text-slate-300">{r.kwh}</td>
+                        <td className="px-5 py-4 text-right text-xs font-black text-emerald-600 dark:text-emerald-400">${r.total_amount}</td>
+                        <td className="px-5 py-4 text-right text-[11px] font-bold text-slate-500">
+                          ${(r.cost_per_kwh || (r.kwh > 0 ? r.total_amount / r.kwh : 0)).toFixed(2)}
+                        </td>
+                        <td className="px-5 py-4 text-right text-xs font-bold text-slate-600 dark:text-slate-400">
+                          {r.odometer > 0 ? r.odometer.toLocaleString() : '-'}
+                        </td>
+                        <td className="px-5 py-4 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                          {r.duration ? `${r.duration}` : '-'}
+                        </td>
+                        <td className="px-5 py-4">
+                          {r.notes ? (
+                            <div className="text-[10px] text-slate-500 truncate max-w-[150px] italic group-hover:whitespace-normal group-hover:bg-white dark:group-hover:bg-slate-800 group-hover:p-2 group-hover:rounded group-hover:shadow-lg group-hover:absolute group-hover:z-50 transition-all border border-transparent group-hover:border-slate-200 dark:group-hover:border-slate-700">
+                              {r.notes}
                             </div>
                           ) : <span className="text-slate-300 dark:text-slate-700">-</span>}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="text-sm font-black text-slate-900 dark:text-white">${r.total_amount}</div>
+                        <td className="px-5 py-4 text-center sticky right-0 bg-white/95 group-hover:bg-slate-50/95 dark:bg-slate-900/95 dark:group-hover:bg-slate-950/95 shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.05)] border-l border-slate-100 dark:border-slate-800">
+                          <div className="flex flex-col items-center gap-2">
+                            {r.rating ? (
+                              <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-500 rounded border border-amber-100 dark:border-amber-900/50">
+                                <span className="text-[9px] font-black leading-none">{r.rating}</span>
+                                <Star size={9} fill="currentColor" />
+                              </div>
+                            ) : <span className="text-[9px] text-slate-300 dark:text-slate-700 block h-4">-</span>}
+
+                            <button
+                              onClick={() => r.id && handleToggleFeature(r.id, !!r.isFeatured)}
+                              className={`p-1.5 rounded-lg transition-all ${r.isFeatured
+                                  ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'
+                                  : 'bg-slate-50 text-slate-300 dark:bg-slate-800 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50'
+                                }`}
+                              title={r.isFeatured ? "撤回精選" : "推薦至實測精選"}
+                            >
+                              {r.isFeatured ? <Heart size={14} fill="currentColor" /> : <Heart size={14} />}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -323,7 +390,7 @@ const AdminStatCard = ({ label, value, unit, icon }: { label: string, value: str
 );
 
 const ShieldCheckIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" /><path d="m9 12 2 2 4-4" /></svg>
 )
 
 export default AdminPanel;

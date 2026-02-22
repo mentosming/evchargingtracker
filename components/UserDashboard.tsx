@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User, ChargingRecord } from '../types';
 import { db } from '../services/firebase';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { PlusCircle, MapPin, Gauge, BatteryCharging, Star, FileText, Trash2, Calendar, ChevronDown, Zap, Clock, CreditCard, MessageSquare, Car, Timer, Share2, Search, FilterX, AlertCircle } from 'lucide-react';
+import { PlusCircle, MapPin, Gauge, BatteryCharging, Star, FileText, Trash2, Calendar, ChevronDown, Zap, Clock, CreditCard, MessageSquare, Car, Timer, Share2, Search, FilterX, AlertCircle, Download } from 'lucide-react';
 import UserStats from './UserStats';
 
 interface UserDashboardProps {
@@ -14,7 +14,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [records, setRecords] = useState<ChargingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Form State
   const getLocalISOString = () => {
     const now = new Date();
@@ -23,8 +23,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   };
 
   const [location, setLocation] = useState('');
-  const [licensePlate, setLicensePlate] = useState(''); 
-  const [duration, setDuration] = useState(''); 
+  const [licensePlate, setLicensePlate] = useState('');
+  const [duration, setDuration] = useState('');
   const [recordDateTime, setRecordDateTime] = useState(getLocalISOString());
   const [mode, setMode] = useState<'kWh' | 'Time'>('kWh');
   const [kwh, setKwh] = useState('');
@@ -49,6 +49,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       .slice(0, 4)
       .map(entry => entry[0]);
   }, [records]);
+
+  // 新增：香港熱門充電站標籤
+  const popularTags = ['Tesla Supercharger', 'Shell Recharge', 'Cornerstone', '三號充電站', 'Crazy Charge'];
+
 
   const uniquePlates = useMemo(() => {
     const plates = new Set<string>();
@@ -98,18 +102,18 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return records.filter(record => {
       const matchesLocation = record.location.toLowerCase().includes(filterLocation.toLowerCase());
       const matchesPlate = filterPlate === 'all' || record.licensePlate?.toUpperCase() === filterPlate;
-      
+
       const recordDate = new Date(record.timestamp);
       const recordMonthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`;
       const matchesMonth = filterMonth === 'all' || recordMonthKey === filterMonth;
-      
+
       return matchesLocation && matchesPlate && matchesMonth;
     });
   }, [records, filterLocation, filterPlate, filterMonth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user.uid || !user.email) {
       alert('登入逾時，請重新登入');
       return;
@@ -129,7 +133,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       alert('請輸入有效的數字 (電量與金額)');
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       const newRecord: Omit<ChargingRecord, 'id'> = {
@@ -149,7 +153,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       };
 
       await addDoc(collection(db, 'charging_records'), newRecord);
-      
+
       setLocation('');
       setDuration('');
       setRecordDateTime(getLocalISOString());
@@ -222,6 +226,48 @@ ${randomSlogan}
     }
   };
 
+  const handleExportCSV = () => {
+    if (filteredRecords.length === 0) {
+      alert("沒有可以匯出的資料");
+      return;
+    }
+
+    const headers = ['日期時間', '地點', '車牌', '模式', '電量(kWh)', '總額(HKD)', '單價($/kWh)', '里程(km)', '時長(mins)', '滿意度(1-5)', '備註'];
+
+    const csvContent = [
+      headers.join(','),
+      ...filteredRecords.map(r => {
+        const dateStr = new Date(r.timestamp).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/,/g, '');
+        const modeStr = r.mode || 'kWh';
+        const notesStr = `"${(r.notes || '').replace(/"/g, '""')}"`;
+
+        return [
+          dateStr,
+          `"${r.location}"`,
+          r.licensePlate || '',
+          modeStr,
+          r.kwh,
+          r.total_amount,
+          (r.cost_per_kwh || (r.kwh > 0 ? r.total_amount / r.kwh : 0)).toFixed(2),
+          r.odometer || 0,
+          r.duration || 0,
+          r.rating || '',
+          notesStr
+        ].join(',');
+      })
+    ].join('\n');
+
+    // 加入 BOM 以解決 Excel 中文亂碼
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `EV_Charging_Records_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const renderStars = (count: number) => (
     <div className="flex items-center gap-0.5">
       {[...Array(5)].map((_, i) => (
@@ -241,7 +287,7 @@ ${randomSlogan}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-1 order-1">
         <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-200/60 dark:border-slate-800 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
-          
+
           <div className="px-8 pt-10 pb-2 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-600/20">
@@ -253,7 +299,7 @@ ${randomSlogan}
               </div>
             </div>
           </div>
-          
+
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             <div className="space-y-6">
               <div className="w-full">
@@ -269,18 +315,36 @@ ${randomSlogan}
                     placeholder="例如：領展停車場"
                   />
                 </div>
-                {frequentLocations.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {frequentLocations.map((loc) => (
-                      <button
-                        key={loc}
-                        type="button"
-                        onClick={() => setLocation(loc)}
-                        className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
-                      >
-                        {loc}
-                      </button>
-                    ))}
+                {(frequentLocations.length > 0 || popularTags.length > 0) && (
+                  <div className="flex flex-col gap-2 mt-3">
+                    {frequentLocations.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">常去:</span>
+                        {frequentLocations.map((loc) => (
+                          <button
+                            key={loc}
+                            type="button"
+                            onClick={() => setLocation(loc)}
+                            className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
+                          >
+                            {loc}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">熱門:</span>
+                      {popularTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setLocation(tag)}
+                          className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -349,7 +413,9 @@ ${randomSlogan}
                 <div className="relative group">
                   <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
                     value={odometer}
                     onChange={(e) => setOdometer(e.target.value)}
                     className={inputWithIconClasses}
@@ -364,31 +430,33 @@ ${randomSlogan}
                 <div className="space-y-2">
                   <label className={labelClasses}>電量 Energy {requiredStar}</label>
                   <div className="relative group">
-                      <BatteryCharging className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        value={kwh}
-                        onChange={(e) => setKwh(e.target.value)}
-                        className={inputWithIconClasses}
-                        placeholder="kWh"
-                      />
+                    <BatteryCharging className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      required
+                      value={kwh}
+                      onChange={(e) => setKwh(e.target.value)}
+                      className={inputWithIconClasses}
+                      placeholder="kWh"
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className={labelClasses}>總額 Amount {requiredStar}</label>
                   <div className="relative group">
-                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                      <input
-                        type="number"
-                        step="0.1"
-                        required
-                        value={totalAmount}
-                        onChange={(e) => setTotalAmount(e.target.value)}
-                        className={inputWithIconClasses}
-                        placeholder="HKD"
-                      />
+                    <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      required
+                      value={totalAmount}
+                      onChange={(e) => setTotalAmount(e.target.value)}
+                      className={inputWithIconClasses}
+                      placeholder="HKD"
+                    />
                   </div>
                 </div>
               </div>
@@ -396,14 +464,16 @@ ${randomSlogan}
               <div className="w-full">
                 <label className={labelClasses}>時長 Duration (mins)</label>
                 <div className="relative group w-full">
-                    <Timer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                    <input
-                      type="number"
-                      value={duration}
-                      onChange={(e) => setDuration(e.target.value)}
-                      className={inputWithIconClasses}
-                      placeholder="分鐘數"
-                    />
+                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    className={inputWithIconClasses}
+                    placeholder="分鐘數"
+                  />
                 </div>
               </div>
             </div>
@@ -412,8 +482,8 @@ ${randomSlogan}
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-600 tracking-[0.15em]">平均單價 Unit Price</span>
                 <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">${costPerKwhValue.toFixed(2)}</span>
-                    <span className="text-[11px] font-black text-slate-400">/ kWh</span>
+                  <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">${costPerKwhValue.toFixed(2)}</span>
+                  <span className="text-[11px] font-black text-slate-400">/ kWh</span>
                 </div>
               </div>
               <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex items-center justify-center border border-emerald-100 dark:border-emerald-800">
@@ -430,8 +500,8 @@ ${randomSlogan}
                 <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                    <span>儲存充電紀錄</span>
-                    <PlusCircle size={20} className="group-hover:rotate-90 transition-transform" />
+                  <span>儲存充電紀錄</span>
+                  <PlusCircle size={20} className="group-hover:rotate-90 transition-transform" />
                 </>
               )}
             </button>
@@ -441,18 +511,29 @@ ${randomSlogan}
 
       <div className="lg:col-span-2 order-2 space-y-6">
         {!loading && records.length > 0 && <UserStats records={statsRecords} />}
-        
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 ml-2 mt-4">
           <div className="flex items-center gap-4">
             <div className="w-1.5 h-8 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/30"></div>
             <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">歷史紀錄</h2>
           </div>
-          
-          {records.length > 0 && (
-            <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
-              Total {records.length} Records
-            </div>
-          )}
+
+          <div className="flex items-center gap-3">
+            {records.length > 0 && (
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-800 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 text-slate-500 dark:text-slate-400 text-[11px] font-black uppercase tracking-widest rounded-full transition-all border border-slate-200 dark:border-slate-700 hover:border-emerald-200 dark:hover:border-emerald-800"
+              >
+                <Download size={14} />
+                匯出 CSV
+              </button>
+            )}
+            {records.length > 0 && (
+              <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
+                Total {records.length} Records
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 紀錄篩選功能區域 */}
@@ -462,7 +543,7 @@ ${randomSlogan}
               <Search size={16} className="text-emerald-500" />
               <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">篩選條件 Filter History</span>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* 地點搜尋 */}
               <div className="relative group">
@@ -536,12 +617,12 @@ ${randomSlogan}
               {records.length > 0 ? "找不到相符的紀錄" : "開始記錄您的第一次充電"}
             </p>
             {records.length > 0 && (
-               <button
-                onClick={() => {setFilterLocation(''); setFilterPlate('all'); setFilterMonth('all');}}
+              <button
+                onClick={() => { setFilterLocation(''); setFilterPlate('all'); setFilterMonth('all'); }}
                 className="mt-4 text-emerald-600 font-bold hover:underline text-sm"
-               >
-                 清除所有搜尋條件
-               </button>
+              >
+                清除所有搜尋條件
+              </button>
             )}
           </div>
         ) : (
@@ -551,7 +632,7 @@ ${randomSlogan}
               const prevRecord = records[fullIndex + 1];
               let traveledDistance = 0;
               let costPerKm = 0;
-              
+
               if (prevRecord && record.odometer > 0 && prevRecord.odometer > 0 && record.odometer > prevRecord.odometer) {
                 traveledDistance = record.odometer - prevRecord.odometer;
                 costPerKm = record.total_amount / traveledDistance;
@@ -560,17 +641,17 @@ ${randomSlogan}
               return (
                 <div key={record.id} className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200/60 dark:border-slate-800 hover:border-emerald-500/50 transition-all group shadow-sm hover:shadow-xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  
+
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-3">
                         <div className="flex flex-col">
-                           <h3 className="font-black text-2xl text-slate-800 dark:text-white">{record.location}</h3>
-                           {record.licensePlate && (
-                             <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded mt-1 self-start border border-emerald-100 dark:border-emerald-800 uppercase">
-                               🚗 {record.licensePlate}
-                             </span>
-                           )}
+                          <h3 className="font-black text-2xl text-slate-800 dark:text-white">{record.location}</h3>
+                          {record.licensePlate && (
+                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded mt-1 self-start border border-emerald-100 dark:border-emerald-800 uppercase">
+                              🚗 {record.licensePlate}
+                            </span>
+                          )}
                         </div>
                         <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center border border-slate-200/50 dark:border-slate-700">
                           {renderStars(record.rating || 0)}
@@ -587,7 +668,7 @@ ${randomSlogan}
                         <div className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">${record.total_amount}</div>
                         <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mt-2">${(record.cost_per_kwh || 0).toFixed(2)} / KWH</div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleShare(record, traveledDistance, costPerKm)}
@@ -597,7 +678,7 @@ ${randomSlogan}
                           <Share2 size={14} strokeWidth={3} />
                           <span>分享成果</span>
                         </button>
-                        
+
                         <button
                           onClick={() => record.id && handleDelete(record.id)}
                           className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-xl transition-all opacity-0 group-hover:opacity-100"
@@ -608,25 +689,31 @@ ${randomSlogan}
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="mt-8 grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6">
+
+                  <div className="mt-8 flex flex-wrap gap-4 md:gap-6">
                     <RecordStat label="充電電量" value={record.kwh} unit="kWh" />
                     <RecordStat label="累計里程" value={record.odometer > 0 ? record.odometer : '--'} unit="km" />
-                    <RecordStat 
-                      label="行駛距離" 
-                      value={traveledDistance > 0 ? traveledDistance : '--'} 
-                      unit={traveledDistance > 0 ? "km" : ""} 
+                    <RecordStat
+                      label="行駛距離"
+                      value={traveledDistance > 0 ? traveledDistance : '--'}
+                      unit={traveledDistance > 0 ? "km" : ""}
                     />
-                    <RecordStat 
-                      label="充電時長" 
-                      value={record.duration ? record.duration : '--'} 
+                    <RecordStat
+                      label="充電時長"
+                      value={record.duration ? record.duration : '--'}
                       unit={record.duration ? "mins" : ""}
                     />
-                    <RecordStat 
-                      label="每公里成本" 
-                      value={costPerKm > 0 ? `$${costPerKm.toFixed(2)}` : '--'} 
+                    <RecordStat
+                      label="每公里成本"
+                      value={costPerKm > 0 ? `$${costPerKm.toFixed(2)}` : '--'}
                       unit={costPerKm > 0 ? "/km" : ""}
-                      highlight={costPerKm > 0} 
+                      highlight={costPerKm > 0}
+                    />
+                    <RecordStat
+                      label="平均電耗"
+                      value={traveledDistance > 0 && record.kwh > 0 ? (traveledDistance / record.kwh).toFixed(2) : '--'}
+                      unit={traveledDistance > 0 && record.kwh > 0 ? "km/kWh" : ""}
+                      highlight={traveledDistance > 0}
                     />
                   </div>
 
@@ -661,10 +748,10 @@ const RecordStat = ({ label, value, unit, highlight = false }: { label: string, 
   <div className="space-y-2">
     <span className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-0.5">{label}</span>
     <div className={`px-4 py-3.5 rounded-2xl border shadow-inner flex items-baseline gap-1 ${highlight ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800' : 'bg-slate-50/80 dark:bg-slate-950/50 border-slate-100 dark:border-slate-800'}`}>
-        <span className={`font-black text-lg leading-none ${highlight ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
-          {value}
-        </span>
-        {unit && <small className={`text-[10px] font-bold uppercase tracking-tighter ${highlight ? 'text-amber-500/70' : 'text-slate-400'}`}>{unit}</small>}
+      <span className={`font-black text-lg leading-none ${highlight ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
+        {value}
+      </span>
+      {unit && <small className={`text-[10px] font-bold uppercase tracking-tighter ${highlight ? 'text-amber-500/70' : 'text-slate-400'}`}>{unit}</small>}
     </div>
   </div>
 );
