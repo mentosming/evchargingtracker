@@ -1,21 +1,28 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, ChargingRecord } from '../types';
+import { User, ChargingRecord, VariableExpense, FixedExpenses } from '../types';
 import { db } from '../services/firebase';
-import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { PlusCircle, MapPin, Gauge, BatteryCharging, Star, FileText, Trash2, Calendar, ChevronDown, Zap, Clock, CreditCard, MessageSquare, Car, Timer, Share2, Search, FilterX, AlertCircle, Download } from 'lucide-react';
+import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { PlusCircle, MapPin, Gauge, BatteryCharging, Star, FileText, Trash2, Calendar, ChevronDown, Zap, Clock, CreditCard, MessageSquare, Car, Timer, Share2, Search, FilterX, AlertCircle, Download, Wallet, AlertTriangle } from 'lucide-react';
 import UserStats from './UserStats';
 
 interface UserDashboardProps {
   user: User;
+  onSettingsClick?: () => void;
 }
 
-const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
+const UserDashboard: React.FC<UserDashboardProps> = ({ user, onSettingsClick }) => {
   const [records, setRecords] = useState<ChargingRecord[]>([]);
+  const [expenses, setExpenses] = useState<VariableExpense[]>([]);
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpenses | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // UI State
+  const [inputTab, setInputTab] = useState<'charging' | 'expense'>('charging');
+
   // Form State
+
   const getLocalISOString = () => {
     const now = new Date();
     const offset = now.getTimezoneOffset() * 60000;
@@ -33,6 +40,15 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [rating, setRating] = useState<number>(5);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form State: Expense
+  const [expenseCategory, setExpenseCategory] = useState<VariableExpense['category']>('Parking');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseNotes, setExpenseNotes] = useState('');
+
+  // History List state
+  const [historyTab, setHistoryTab] = useState<'charging' | 'expense'>('charging');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Filter State
   const [filterLocation, setFilterLocation] = useState('');
@@ -83,9 +99,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   useEffect(() => {
     if (!user.uid) return;
     setLoading(true);
-    const q = query(collection(db, 'charging_records'), where('uid', '==', user.uid));
-    // Fix: Using any for snapshot to resolve type mismatch in Firebase Modular SDK onSnapshot overload
-    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+
+    // 1. Fetch Charging Records
+    const qRecords = query(collection(db, 'charging_records'), where('uid', '==', user.uid));
+    const unsubRecords = onSnapshot(qRecords, (snapshot: any) => {
       const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as ChargingRecord[];
       data.sort((a, b) => b.timestamp - a.timestamp);
       setRecords(data);
@@ -95,7 +112,28 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       setError("無法載入紀錄");
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    // 2. Fetch Variable Expenses
+    const qExpenses = query(collection(db, 'other_expenses'), where('uid', '==', user.uid));
+    const unsubExpenses = onSnapshot(qExpenses, (snapshot: any) => {
+      const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as VariableExpense[];
+      setExpenses(data);
+    });
+
+    // 3. Fetch Fixed Expenses (from user_settings)
+    const unsubFixed = onSnapshot(doc(db, 'user_settings', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setFixedExpenses(docSnap.data() as FixedExpenses);
+      } else {
+        setFixedExpenses(null);
+      }
+    });
+
+    return () => {
+      unsubRecords();
+      unsubExpenses();
+      unsubFixed();
+    };
   }, [user.uid]);
 
   const filteredRecords = useMemo(() => {
@@ -119,55 +157,92 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       return;
     }
 
-    if (!location.trim() || !kwh || !totalAmount) {
-      alert('請填寫所有必填欄位 (地點、電量、總額)');
-      return;
-    }
+    if (inputTab === 'charging') {
+      if (!location.trim() || !kwh || !totalAmount) {
+        alert('請填寫所有必填欄位 (地點、電量、總額)');
+        return;
+      }
 
-    const parsedKwh = parseFloat(kwh);
-    const parsedAmount = parseFloat(totalAmount);
-    const parsedOdometer = odometer ? parseFloat(odometer) : 0;
-    const parsedDuration = duration ? parseInt(duration) : 0;
+      const parsedKwh = parseFloat(kwh);
+      const parsedAmount = parseFloat(totalAmount);
+      const parsedOdometer = odometer ? parseFloat(odometer) : 0;
+      const parsedDuration = duration ? parseInt(duration) : 0;
 
-    if (isNaN(parsedKwh) || isNaN(parsedAmount)) {
-      alert('請輸入有效的數字 (電量與金額)');
-      return;
-    }
+      if (isNaN(parsedKwh) || isNaN(parsedAmount)) {
+        alert('請輸入有效的數字 (電量與金額)');
+        return;
+      }
 
-    setIsSubmitting(true);
-    try {
-      const newRecord: Omit<ChargingRecord, 'id'> = {
-        uid: user.uid,
-        userEmail: user.email,
-        timestamp: new Date(recordDateTime).getTime(),
-        location: location.trim(),
-        licensePlate: licensePlate.trim().toUpperCase(),
-        duration: parsedDuration || 0,
-        mode,
-        kwh: parsedKwh,
-        total_amount: parsedAmount,
-        cost_per_kwh: costPerKwhValue,
-        odometer: isNaN(parsedOdometer) ? 0 : parsedOdometer,
-        rating: rating,
-        notes: notes.trim(),
-      };
+      setIsSubmitting(true);
+      try {
+        const newRecord: Omit<ChargingRecord, 'id'> = {
+          uid: user.uid,
+          userEmail: user.email,
+          timestamp: new Date(recordDateTime).getTime(),
+          location: location.trim(),
+          licensePlate: licensePlate.trim().toUpperCase(),
+          duration: parsedDuration || 0,
+          mode,
+          kwh: parsedKwh,
+          total_amount: parsedAmount,
+          cost_per_kwh: costPerKwhValue,
+          odometer: isNaN(parsedOdometer) ? 0 : parsedOdometer,
+          rating: rating,
+          notes: notes.trim(),
+        };
 
-      await addDoc(collection(db, 'charging_records'), newRecord);
+        await addDoc(collection(db, 'charging_records'), newRecord);
 
-      setLocation('');
-      setDuration('');
-      setRecordDateTime(getLocalISOString());
-      setKwh('');
-      setTotalAmount('');
-      setOdometer('');
-      setRating(5);
-      setNotes('');
-      alert('新增成功！');
-    } catch (err: any) {
-      console.error("Firestore Error:", err);
-      alert(`新增失敗：${err.message || '請檢查網路連線或權限'}`);
-    } finally {
-      setIsSubmitting(false);
+        setLocation('');
+        setDuration('');
+        setRecordDateTime(getLocalISOString());
+        setKwh('');
+        setTotalAmount('');
+        setOdometer('');
+        setRating(5);
+        setNotes('');
+        alert('充電紀錄新增成功！');
+      } catch (err: any) {
+        console.error("Firestore Error:", err);
+        alert(`新增失敗：${err.message || '請檢查網路連線或權限'}`);
+      } finally {
+        setIsSubmitting(false);
+      }
+
+    } else if (inputTab === 'expense') {
+      // Expense Submission
+      if (!expenseAmount) {
+        alert('請填寫金額');
+        return;
+      }
+      const parsedAmount = parseFloat(expenseAmount);
+      if (isNaN(parsedAmount)) {
+        alert('請輸入有效的金額');
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const newExpense: Omit<VariableExpense, 'id'> = {
+          uid: user.uid,
+          userEmail: user.email,
+          timestamp: new Date().getTime(),
+          category: expenseCategory,
+          amount: parsedAmount,
+          notes: expenseNotes.trim(),
+        };
+
+        await addDoc(collection(db, 'other_expenses'), newExpense);
+
+        setExpenseAmount('');
+        setExpenseNotes('');
+        alert('支出紀錄新增成功！');
+      } catch (err: any) {
+        console.error("Firestore Error:", err);
+        alert(`新增失敗：${err.message || '請檢查網路連線或權限'}`);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -268,13 +343,48 @@ ${randomSlogan}
     document.body.removeChild(link);
   };
 
-  const renderStars = (count: number) => (
+  const handleDeleteExpense = async (id: string) => {
+    if (!window.confirm('確定要刪除這筆開支嗎？')) return;
+    // Assuming setDeletingId is defined elsewhere, e.g., const [deletingId, setDeletingId] = useState<string | null>(null);
+    // setDeletingId(id); // Uncomment if setDeletingId is available
+    try {
+      await deleteDoc(doc(db, 'other_expenses', id));
+    } catch (err: any) {
+      console.error('Error deleting expense:', err);
+      alert('刪除失敗');
+    } finally {
+      // setDeletingId(null); // Uncomment if setDeletingId is available
+    }
+  };
+
+  const renderStars = (rating: number) => (
     <div className="flex items-center gap-0.5">
       {[...Array(5)].map((_, i) => (
-        <Star key={i} size={11} className={`${i < count ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-700'}`} />
+        <Star key={i} size={11} className={`${i < rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-700'}`} />
       ))}
     </div>
   );
+
+  const alerts = useMemo(() => {
+    if (!fixedExpenses) return [];
+    const msInDay = 1000 * 60 * 60 * 24;
+    const now = Date.now();
+    const notices = [];
+
+    if (fixedExpenses.insuranceExpiry) {
+      const daysLeft = Math.ceil((fixedExpenses.insuranceExpiry - now) / msInDay);
+      if (daysLeft <= 30 && daysLeft >= 0) notices.push({ type: 'insurance', days: daysLeft, text: `您的保險將於 ${daysLeft} 天後到期，請盡速續保！` });
+      else if (daysLeft < 0) notices.push({ type: 'insurance', days: daysLeft, text: `您的保險已過期 ${Math.abs(daysLeft)} 天！請立即處理！`, urgent: true });
+    }
+
+    if (fixedExpenses.licenseExpiry) {
+      const daysLeft = Math.ceil((fixedExpenses.licenseExpiry - now) / msInDay);
+      if (daysLeft <= 30 && daysLeft >= 0) notices.push({ type: 'license', days: daysLeft, text: `您的牌費將於 ${daysLeft} 天後到期，請盡速續約！` });
+      else if (daysLeft < 0) notices.push({ type: 'license', days: daysLeft, text: `您的牌費已過期 ${Math.abs(daysLeft)} 天！請立即處理！`, urgent: true });
+    }
+
+    return notices;
+  }, [fixedExpenses]);
 
   const statsRecords = [...records].sort((a, b) => a.timestamp - b.timestamp);
 
@@ -284,454 +394,608 @@ ${randomSlogan}
   const requiredStar = <span className="text-rose-500 ml-1 text-[12px] font-black">*</span>;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-1 order-1">
-        <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-200/60 dark:border-slate-800 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
-
-          <div className="px-8 pt-10 pb-2 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-600/20">
-                <PlusCircle size={20} />
-              </div>
-              <div>
-                <h2 className="font-black text-xl text-slate-800 dark:text-white leading-none">新增充電</h2>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1 block">New Transaction</span>
-              </div>
+    <div className="flex flex-col gap-6">
+      {alerts.length > 0 && (
+        <div className="flex flex-col gap-3 w-full">
+          {alerts.map((alert, idx) => (
+            <div key={idx} className={`flex items-center gap-3 px-5 py-4 rounded-2xl border ${alert.urgent ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/30 dark:border-rose-800 dark:text-rose-400' : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800/50 dark:text-amber-400'} shadow-sm animate-in fade-in slide-in-from-top-2`}>
+              {alert.urgent ? <AlertTriangle size={20} className="text-rose-500 shrink-0" /> : <AlertCircle size={20} className="text-amber-500 shrink-0" />}
+              <span className="text-sm font-black leading-tight">{alert.text}</span>
             </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-8 space-y-8">
-            <div className="space-y-6">
-              <div className="w-full">
-                <label className={labelClasses}>充電地點 Location {requiredStar}</label>
-                <div className="relative group w-full">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                  <input
-                    type="text"
-                    required
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className={inputWithIconClasses}
-                    placeholder="例如：領展停車場"
-                  />
-                </div>
-                {(frequentLocations.length > 0 || popularTags.length > 0) && (
-                  <div className="flex flex-col gap-2 mt-3">
-                    {frequentLocations.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">常去:</span>
-                        {frequentLocations.map((loc) => (
-                          <button
-                            key={loc}
-                            type="button"
-                            onClick={() => setLocation(loc)}
-                            className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
-                          >
-                            {loc}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">熱門:</span>
-                      {popularTags.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setLocation(tag)}
-                          className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
-                        >
-                          {tag}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="w-full">
-                <label className={labelClasses}>時間 Date & Time</label>
-                <div className="relative group w-full">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors z-10" size={18} />
-                  <input
-                    type="datetime-local"
-                    required
-                    value={recordDateTime}
-                    onChange={(e) => setRecordDateTime(e.target.value)}
-                    className={`${inputWithIconClasses} w-full [color-scheme:light] dark:[color-scheme:dark]`}
-                  />
-                </div>
-              </div>
-
-              <div className="w-full">
-                <label className={labelClasses}>車牌號碼 Plate</label>
-                <div className="relative group w-full">
-                  <Car className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                  <input
-                    type="text"
-                    value={licensePlate}
-                    onChange={(e) => setLicensePlate(e.target.value)}
-                    className={inputWithIconClasses}
-                    placeholder="例如：TE5LA"
-                  />
-                </div>
-                {/* 新增：過往車牌快速選擇 */}
-                {uniquePlates.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {uniquePlates.slice(0, 5).map((plate) => (
-                      <button
-                        key={plate}
-                        type="button"
-                        onClick={() => setLicensePlate(plate)}
-                        className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all uppercase"
-                      >
-                        {plate}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className={labelClasses}>計費模式</label>
-                <div className="relative">
-                  <select
-                    value={mode}
-                    onChange={(e) => setMode(e.target.value as any)}
-                    className={`${inputBaseClasses} appearance-none pr-10`}
-                  >
-                    <option value="kWh">計量 (kWh)</option>
-                    <option value="Time">計時 (Time)</option>
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className={labelClasses}>當前里程</label>
-                <div className="relative group">
-                  <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    pattern="[0-9]*\.?[0-9]*"
-                    value={odometer}
-                    onChange={(e) => setOdometer(e.target.value)}
-                    className={inputWithIconClasses}
-                    placeholder="km"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className={labelClasses}>電量 Energy {requiredStar}</label>
-                  <div className="relative group">
-                    <BatteryCharging className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*\.?[0-9]*"
-                      required
-                      value={kwh}
-                      onChange={(e) => setKwh(e.target.value)}
-                      className={inputWithIconClasses}
-                      placeholder="kWh"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className={labelClasses}>總額 Amount {requiredStar}</label>
-                  <div className="relative group">
-                    <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*\.?[0-9]*"
-                      required
-                      value={totalAmount}
-                      onChange={(e) => setTotalAmount(e.target.value)}
-                      className={inputWithIconClasses}
-                      placeholder="HKD"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="w-full">
-                <label className={labelClasses}>時長 Duration (mins)</label>
-                <div className="relative group w-full">
-                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    className={inputWithIconClasses}
-                    placeholder="分鐘數"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-inner flex justify-between items-center transition-all">
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-600 tracking-[0.15em]">平均單價 Unit Price</span>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">${costPerKwhValue.toFixed(2)}</span>
-                  <span className="text-[11px] font-black text-slate-400">/ kWh</span>
-                </div>
-              </div>
-              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex items-center justify-center border border-emerald-100 dark:border-emerald-800">
-                <Zap className="text-emerald-500" size={24} fill="currentColor" />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-[24px] font-black text-lg shadow-[0_15px_30px_-5px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-2 group"
-            >
-              {isSubmitting ? (
-                <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <span>儲存充電紀錄</span>
-                  <PlusCircle size={20} className="group-hover:rotate-90 transition-transform" />
-                </>
-              )}
-            </button>
-          </form>
+          ))}
         </div>
-      </div>
+      )}
 
-      <div className="lg:col-span-2 order-2 space-y-6">
-        {!loading && records.length > 0 && <UserStats records={statsRecords} />}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1 order-1">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-200/60 dark:border-slate-800 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 ml-2 mt-4">
-          <div className="flex items-center gap-4">
-            <div className="w-1.5 h-8 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/30"></div>
-            <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">歷史紀錄</h2>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {records.length > 0 && (
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-800 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 text-slate-500 dark:text-slate-400 text-[11px] font-black uppercase tracking-widest rounded-full transition-all border border-slate-200 dark:border-slate-700 hover:border-emerald-200 dark:hover:border-emerald-800"
-              >
-                <Download size={14} />
-                匯出 CSV
-              </button>
-            )}
-            {records.length > 0 && (
-              <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
-                Total {records.length} Records
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 紀錄篩選功能區域 */}
-        {records.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200/60 dark:border-slate-800 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Search size={16} className="text-emerald-500" />
-              <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">篩選條件 Filter History</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* 地點搜尋 */}
-              <div className="relative group">
-                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={16} />
-                <input
-                  type="text"
-                  placeholder="搜尋地點..."
-                  value={filterLocation}
-                  onChange={(e) => setFilterLocation(e.target.value)}
-                  className="w-full h-11 pl-10 pr-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
-                />
-              </div>
-
-              {/* 車牌篩選 */}
-              <div className="relative group">
-                <Car className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors pointer-events-none" size={16} />
-                <select
-                  value={filterPlate}
-                  onChange={(e) => setFilterPlate(e.target.value)}
-                  className="w-full h-11 pl-10 pr-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none appearance-none transition-all"
-                >
-                  <option value="all">所有車牌</option>
-                  {uniquePlates.map(plate => (
-                    <option key={plate} value={plate}>{plate}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-
-              {/* 日期篩選 */}
-              <div className="relative group">
-                <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors pointer-events-none" size={16} />
-                <select
-                  value={filterMonth}
-                  onChange={(e) => setFilterMonth(e.target.value)}
-                  className="w-full h-11 pl-10 pr-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none appearance-none transition-all"
-                >
-                  <option value="all">所有月份</option>
-                  {uniqueMonths.map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {(filterLocation || filterPlate !== 'all' || filterMonth !== 'all') && (
-              <div className="flex justify-end pt-2 border-t border-slate-50 dark:border-slate-800">
+            <div className="px-8 pt-10 pb-4 flex items-center justify-between">
+              <div className="flex bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl w-full border border-slate-200/50 dark:border-slate-800 shadow-inner">
                 <button
-                  onClick={() => {
-                    setFilterLocation('');
-                    setFilterPlate('all');
-                    setFilterMonth('all');
-                  }}
-                  className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 transition-colors"
+                  type="button"
+                  onClick={() => setInputTab('charging')}
+                  className={`flex-1 py-3 rounded-xl text-sm justify-center items-center flex gap-2 font-black uppercase tracking-widest transition-all ${inputTab === 'charging'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.1)] scale-[1.02]'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
                 >
-                  <FilterX size={14} />
-                  重設所有篩選
+                  <BatteryCharging size={18} />
+                  充電 Charge
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputTab('expense')}
+                  className={`flex-1 py-3 rounded-xl justify-center items-center flex gap-2 text-sm font-black uppercase tracking-widest transition-all ${inputTab === 'expense'
+                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.1)] scale-[1.02]'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                >
+                  <Wallet size={18} />
+                  開支 Expense
                 </button>
               </div>
-            )}
-          </div>
-        )}
+            </div>
 
-        {loading ? (
-          <div className="flex justify-center py-24"><div className="animate-spin h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full"></div></div>
-        ) : filteredRecords.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] p-20 text-center border-2 border-slate-100 dark:border-slate-800 border-dashed">
-            <BatteryCharging className="mx-auto h-16 w-16 text-slate-200 dark:text-slate-800 mb-6" />
-            <p className="text-slate-500 dark:text-slate-400 font-black text-xl">
-              {records.length > 0 ? "找不到相符的紀錄" : "開始記錄您的第一次充電"}
-            </p>
-            {records.length > 0 && (
-              <button
-                onClick={() => { setFilterLocation(''); setFilterPlate('all'); setFilterMonth('all'); }}
-                className="mt-4 text-emerald-600 font-bold hover:underline text-sm"
-              >
-                清除所有搜尋條件
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {filteredRecords.map((record, idx) => {
-              const fullIndex = records.findIndex(r => r.id === record.id);
-              const prevRecord = records[fullIndex + 1];
-              let traveledDistance = 0;
-              let costPerKm = 0;
+            <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-6">
 
-              if (prevRecord && record.odometer > 0 && prevRecord.odometer > 0 && record.odometer > prevRecord.odometer) {
-                traveledDistance = record.odometer - prevRecord.odometer;
-                costPerKm = record.total_amount / traveledDistance;
-              }
-
-              return (
-                <div key={record.id} className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200/60 dark:border-slate-800 hover:border-emerald-500/50 transition-all group shadow-sm hover:shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex flex-col">
-                          <h3 className="font-black text-2xl text-slate-800 dark:text-white">{record.location}</h3>
-                          {record.licensePlate && (
-                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded mt-1 self-start border border-emerald-100 dark:border-emerald-800 uppercase">
-                              🚗 {record.licensePlate}
-                            </span>
+              {inputTab === 'charging' ? (
+                // ==============================
+                // CHARGING TAB
+                // ==============================
+                <>
+                  <div className="space-y-6">
+                    <div className="w-full">
+                      <label className={labelClasses}>充電地點 Location {requiredStar}</label>
+                      <div className="relative group w-full">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                        <input
+                          type="text"
+                          required
+                          value={location}
+                          onChange={(e) => setLocation(e.target.value)}
+                          className={inputWithIconClasses}
+                          placeholder="例如：領展停車場"
+                        />
+                      </div>
+                      {(frequentLocations.length > 0 || popularTags.length > 0) && (
+                        <div className="flex flex-col gap-2 mt-3">
+                          {frequentLocations.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">常去:</span>
+                              {frequentLocations.map((loc) => (
+                                <button
+                                  key={loc}
+                                  type="button"
+                                  onClick={() => setLocation(loc)}
+                                  className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
+                                >
+                                  {loc}
+                                </button>
+                              ))}
+                            </div>
                           )}
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">熱門:</span>
+                            {popularTags.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => setLocation(tag)}
+                                className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all"
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center border border-slate-200/50 dark:border-slate-700">
-                          {renderStars(record.rating || 0)}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                        <Calendar size={13} />
-                        {new Date(record.timestamp).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })}
+                      )}
+                    </div>
+
+                    <div className="w-full">
+                      <label className={labelClasses}>時間 Date & Time</label>
+                      <div className="relative group w-full">
+                        <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors z-10" size={18} />
+                        <input
+                          type="datetime-local"
+                          required
+                          value={recordDateTime}
+                          onChange={(e) => setRecordDateTime(e.target.value)}
+                          className={`${inputWithIconClasses} w-full [color-scheme:light] dark:[color-scheme:dark]`}
+                        />
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-4 min-w-[140px]">
-                      <div className="text-right">
-                        <div className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">${record.total_amount}</div>
-                        <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mt-2">${(record.cost_per_kwh || 0).toFixed(2)} / KWH</div>
+                    <div className="w-full">
+                      <label className={labelClasses}>車牌號碼 Plate</label>
+                      <div className="relative group w-full">
+                        <Car className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                        <input
+                          type="text"
+                          value={licensePlate}
+                          onChange={(e) => setLicensePlate(e.target.value)}
+                          className={inputWithIconClasses}
+                          placeholder="例如：TE5LA"
+                        />
                       </div>
+                      {/* 新增：過往車牌快速選擇 */}
+                      {uniquePlates.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {uniquePlates.slice(0, 5).map((plate) => (
+                            <button
+                              key={plate}
+                              type="button"
+                              onClick={() => setLicensePlate(plate)}
+                              className="px-3 py-1.5 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-lg border border-slate-200/50 dark:border-slate-700 hover:border-emerald-500/30 hover:text-emerald-600 transition-all uppercase"
+                            >
+                              {plate}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleShare(record, traveledDistance, costPerKm)}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-black text-xs shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 active:scale-95 transition-all animate-pulse-subtle"
-                          title="分享給朋友"
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={labelClasses}>計費模式</label>
+                      <div className="relative">
+                        <select
+                          value={mode}
+                          onChange={(e) => setMode(e.target.value as any)}
+                          className={`${inputBaseClasses} appearance-none pr-10`}
                         >
-                          <Share2 size={14} strokeWidth={3} />
-                          <span>分享成果</span>
-                        </button>
-
-                        <button
-                          onClick={() => record.id && handleDelete(record.id)}
-                          className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                          title="刪除"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                          <option value="kWh">計量 (kWh)</option>
+                          <option value="Time">計時 (Time)</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className={labelClasses}>當前里程</label>
+                      <div className="relative group">
+                        <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*\.?[0-9]*"
+                          value={odometer}
+                          onChange={(e) => setOdometer(e.target.value)}
+                          className={inputWithIconClasses}
+                          placeholder="km"
+                        />
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-8 flex flex-wrap gap-4 md:gap-6">
-                    <RecordStat label="充電電量" value={record.kwh} unit="kWh" />
-                    <RecordStat label="累計里程" value={record.odometer > 0 ? record.odometer : '--'} unit="km" />
-                    <RecordStat
-                      label="行駛距離"
-                      value={traveledDistance > 0 ? traveledDistance : '--'}
-                      unit={traveledDistance > 0 ? "km" : ""}
-                    />
-                    <RecordStat
-                      label="充電時長"
-                      value={record.duration ? record.duration : '--'}
-                      unit={record.duration ? "mins" : ""}
-                    />
-                    <RecordStat
-                      label="每公里成本"
-                      value={costPerKm > 0 ? `$${costPerKm.toFixed(2)}` : '--'}
-                      unit={costPerKm > 0 ? "/km" : ""}
-                      highlight={costPerKm > 0}
-                    />
-                    <RecordStat
-                      label="平均電耗"
-                      value={traveledDistance > 0 && record.kwh > 0 ? (traveledDistance / record.kwh).toFixed(2) : '--'}
-                      unit={traveledDistance > 0 && record.kwh > 0 ? "km/kWh" : ""}
-                      highlight={traveledDistance > 0}
-                    />
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className={labelClasses}>電量 Energy {requiredStar}</label>
+                        <div className="relative group">
+                          <BatteryCharging className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            pattern="[0-9]*\.?[0-9]*"
+                            required
+                            value={kwh}
+                            onChange={(e) => setKwh(e.target.value)}
+                            className={inputWithIconClasses}
+                            placeholder="kWh"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className={labelClasses}>總額 Amount {requiredStar}</label>
+                        <div className="relative group">
+                          <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            pattern="[0-9]*\.?[0-9]*"
+                            required
+                            value={totalAmount}
+                            onChange={(e) => setTotalAmount(e.target.value)}
+                            className={inputWithIconClasses}
+                            placeholder="HKD"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="w-full">
+                      <label className={labelClasses}>時長 Duration (mins)</label>
+                      <div className="relative group w-full">
+                        <Timer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={duration}
+                          onChange={(e) => setDuration(e.target.value)}
+                          className={inputWithIconClasses}
+                          placeholder="分鐘數"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {record.notes && (
-                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-                      <FileText className="shrink-0 text-slate-300" size={16} />
-                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic">
-                        {record.notes}
-                      </p>
+                  <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800 shadow-inner flex justify-between items-center transition-all">
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-600 tracking-[0.15em]">平均單價 Unit Price</span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">${costPerKwhValue.toFixed(2)}</span>
+                        <span className="text-[11px] font-black text-slate-400">/ kWh</span>
+                      </div>
                     </div>
-                  )}
+                    <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex items-center justify-center border border-emerald-100 dark:border-emerald-800">
+                      <Zap className="text-emerald-500" size={24} fill="currentColor" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // ==============================
+                // EXPENSE TAB
+                // ==============================
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="w-full space-y-2">
+                    <label className={labelClasses}>支出類別 Category {requiredStar}</label>
+                    <div className="relative">
+                      <select
+                        value={expenseCategory}
+                        onChange={(e) => setExpenseCategory(e.target.value as any)}
+                        className={`${inputBaseClasses} appearance-none pr-10`}
+                      >
+                        <option value="Parking">時租 (Parking)</option>
+                        <option value="Toll">隧道費 (Toll)</option>
+                        <option value="Maintenance">消耗品 / 維修保養 (Maintenance)</option>
+                        <option value="Detailing">汽車美容 (Detailing)</option>
+                        <option value="Fine">定額罰款 (Fine)</option>
+                        <option value="Other">其他雜費 (Other)</option>
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 w-full">
+                    <label className={labelClasses}>總額 Amount {requiredStar}</label>
+                    <div className="relative group">
+                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*\.?[0-9]*"
+                        required
+                        value={expenseAmount}
+                        onChange={(e) => setExpenseAmount(e.target.value)}
+                        className={inputWithIconClasses.replace('focus:ring-emerald-500/10', 'focus:ring-amber-500/10 focus:border-amber-500')}
+                        placeholder="HKD"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="w-full space-y-2">
+                    <label className={labelClasses}>備註 Notes</label>
+                    <div className="relative group w-full">
+                      <FileText className="absolute left-4 top-4 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
+                      <textarea
+                        value={expenseNotes}
+                        onChange={(e) => setExpenseNotes(e.target.value)}
+                        className={`${inputWithIconClasses.replace('focus:ring-emerald-500/10', 'focus:ring-amber-500/10 focus:border-amber-500')} py-4 min-h-[120px] resize-none h-auto leading-relaxed`}
+                        placeholder="例如：日泊、換機油..."
+                      />
+                    </div>
+                  </div>
                 </div>
-              );
-            })}
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full h-16 text-white rounded-[24px] font-black text-lg transition-all flex items-center justify-center gap-2 group ${inputTab === 'charging'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] shadow-[0_15px_30px_-5px_rgba(16,185,129,0.3)]'
+                  : 'bg-amber-500 hover:bg-amber-400 active:scale-[0.98] shadow-[0_15px_30px_-5px_rgba(245,158,11,0.3)]'
+                  }`}
+              >
+                {isSubmitting ? (
+                  <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>{inputTab === 'charging' ? '儲存充電紀錄' : '儲存開支紀錄'}</span>
+                    <PlusCircle size={20} className="group-hover:rotate-90 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
           </div>
-        )}
-      </div>
-      <style>{`
+        </div>
+
+        <div className="lg:col-span-2 order-2 space-y-6">
+          {!loading && records.length > 0 && <UserStats records={statsRecords} expenses={expenses} fixedExpenses={fixedExpenses} onSettingsClick={onSettingsClick} />}
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 ml-2 mt-4">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-1.5 h-8 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/30"></div>
+                <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">歷史紀錄</h2>
+              </div>
+              <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-800">
+                <button
+                  onClick={() => setHistoryTab('charging')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${historyTab === 'charging'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-md transform scale-[1.02]'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                >
+                  充電紀錄
+                </button>
+                <button
+                  onClick={() => setHistoryTab('expense')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${historyTab === 'expense'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-md transform scale-[1.02]'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                >
+                  其他開支
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {historyTab === 'charging' && records.length > 0 && (
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-800 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 text-slate-500 dark:text-slate-400 text-[11px] font-black uppercase tracking-widest rounded-full transition-all border border-slate-200 dark:border-slate-700 hover:border-emerald-200 dark:hover:border-emerald-800"
+                >
+                  <Download size={14} />
+                  匯出 CSV
+                </button>
+              )}
+              <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
+                Total {historyTab === 'charging' ? records.length : expenses.length}
+              </div>
+            </div>
+          </div>
+
+          {/* 紀錄篩選功能區域 */}
+          {historyTab === 'charging' && records.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200/60 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Search size={16} className="text-emerald-500" />
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">篩選條件 Filter History</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 地點搜尋 */}
+                <div className="relative group">
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={16} />
+                  <input
+                    type="text"
+                    placeholder="搜尋地點..."
+                    value={filterLocation}
+                    onChange={(e) => setFilterLocation(e.target.value)}
+                    className="w-full h-11 pl-10 pr-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* 車牌篩選 */}
+                <div className="relative group">
+                  <Car className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors pointer-events-none" size={16} />
+                  <select
+                    value={filterPlate}
+                    onChange={(e) => setFilterPlate(e.target.value)}
+                    className="w-full h-11 pl-10 pr-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none appearance-none transition-all"
+                  >
+                    <option value="all">所有車牌</option>
+                    {uniquePlates.map(plate => (
+                      <option key={plate} value={plate}>{plate}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                {/* 日期篩選 */}
+                <div className="relative group">
+                  <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors pointer-events-none" size={16} />
+                  <select
+                    value={filterMonth}
+                    onChange={(e) => setFilterMonth(e.target.value)}
+                    className="w-full h-11 pl-10 pr-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none appearance-none transition-all"
+                  >
+                    <option value="all">所有月份</option>
+                    {uniqueMonths.map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {(filterLocation || filterPlate !== 'all' || filterMonth !== 'all') && (
+                <div className="pt-4 mt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {filterLocation && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800 px-2 py-1 rounded-md uppercase tracking-wide">📍 {filterLocation}</span>}
+                    {filterPlate !== 'all' && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800 px-2 py-1 rounded-md uppercase tracking-wide">🚗 {filterPlate}</span>}
+                    {filterMonth !== 'all' && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800 px-2 py-1 rounded-md uppercase tracking-wide">📅 {filterMonth}</span>}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setFilterLocation('');
+                      setFilterPlate('all');
+                      setFilterMonth('all');
+                    }}
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 transition-colors"
+                  >
+                    <FilterX size={14} />
+                    重設所有篩選
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {historyTab === 'expense' ? (
+            <div className="space-y-6">
+              {expenses.length === 0 ? (
+                <div className="bg-white dark:bg-slate-900 rounded-[40px] p-16 text-center border-2 border-slate-100 dark:border-slate-800 border-dashed">
+                  <FileText className="mx-auto h-12 w-12 text-slate-200 dark:text-slate-800 mb-4" />
+                  <p className="text-slate-500 dark:text-slate-400 font-black text-lg">暫無變動開支紀錄</p>
+                </div>
+              ) : (
+                expenses.map(expense => (
+                  <div key={expense.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200/60 dark:border-slate-800 hover:border-amber-500/50 transition-all group shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-500 rounded-2xl">
+                        <Wallet size={24} />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-xl text-slate-800 dark:text-white uppercase">{expense.category}</h3>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 mt-1">
+                          <Calendar size={12} />
+                          {new Date(expense.timestamp).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto mt-2 md:mt-0">
+                      {expense.notes && (
+                        <p className="text-sm text-slate-500 italic flex-1 md:flex-none max-w-[200px] truncate">"{expense.notes}"</p>
+                      )}
+                      <div className="flex items-center gap-4">
+                        <span className="text-3xl font-black text-amber-500">
+                          ${expense.amount}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteExpense(expense.id!)}
+                          disabled={deletingId === expense.id}
+                          className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-all"
+                        >
+                          {deletingId === expense.id ? <div className="h-5 w-5 border-2 border-rose-500 border-t-transparent origin-center animate-spin rounded-full"></div> : <Trash2 size={18} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            loading ? (
+              <div className="flex justify-center py-24"><div className="animate-spin h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full"></div></div>
+            ) : filteredRecords.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] p-20 text-center border-2 border-slate-100 dark:border-slate-800 border-dashed">
+                <BatteryCharging className="mx-auto h-16 w-16 text-slate-200 dark:text-slate-800 mb-6" />
+                <p className="text-slate-500 dark:text-slate-400 font-black text-xl">
+                  {records.length > 0 ? "找不到相符的紀錄" : "開始記錄您的第一次充電"}
+                </p>
+                {records.length > 0 && (
+                  <button
+                    onClick={() => { setFilterLocation(''); setFilterPlate('all'); setFilterMonth('all'); }}
+                    className="mt-4 text-emerald-600 font-bold hover:underline text-sm"
+                  >
+                    清除所有搜尋條件
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {filteredRecords.map((record, idx) => {
+                  const fullIndex = records.findIndex(r => r.id === record.id);
+                  const prevRecord = records[fullIndex + 1];
+                  let traveledDistance = 0;
+                  let costPerKm = 0;
+
+                  if (prevRecord && record.odometer > 0 && prevRecord.odometer > 0 && record.odometer > prevRecord.odometer) {
+                    traveledDistance = record.odometer - prevRecord.odometer;
+                    costPerKm = record.total_amount / traveledDistance;
+                  }
+
+                  return (
+                    <div key={record.id} className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200/60 dark:border-slate-800 hover:border-emerald-500/50 transition-all group shadow-sm hover:shadow-xl relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex flex-col">
+                              <h3 className="font-black text-2xl text-slate-800 dark:text-white">{record.location}</h3>
+                              {record.licensePlate && (
+                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded mt-1 self-start border border-emerald-100 dark:border-emerald-800 uppercase">
+                                  🚗 {record.licensePlate}
+                                </span>
+                              )}
+                            </div>
+                            <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center border border-slate-200/50 dark:border-slate-700">
+                              {renderStars(record.rating || 0)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                            <Calendar size={13} />
+                            {new Date(record.timestamp).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-4 min-w-[140px]">
+                          <div className="text-right">
+                            <div className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">${record.total_amount}</div>
+                            <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mt-2">${(record.cost_per_kwh || 0).toFixed(2)} / KWH</div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleShare(record, traveledDistance, costPerKm)}
+                              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-black text-xs shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 active:scale-95 transition-all animate-pulse-subtle"
+                              title="分享給朋友"
+                            >
+                              <Share2 size={14} strokeWidth={3} />
+                              <span>分享成果</span>
+                            </button>
+
+                            <button
+                              onClick={() => record.id && handleDelete(record.id)}
+                              className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                              title="刪除"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-8 flex flex-wrap gap-4 md:gap-6">
+                        <RecordStat label="充電電量" value={record.kwh} unit="kWh" />
+                        <RecordStat label="累計里程" value={record.odometer > 0 ? record.odometer : '--'} unit="km" />
+                        <RecordStat
+                          label="行駛距離"
+                          value={traveledDistance > 0 ? traveledDistance : '--'}
+                          unit={traveledDistance > 0 ? "km" : ""}
+                        />
+                        <RecordStat
+                          label="充電時長"
+                          value={record.duration ? record.duration : '--'}
+                          unit={record.duration ? "mins" : ""}
+                        />
+                        <RecordStat
+                          label="每公里成本"
+                          value={costPerKm > 0 ? `$${costPerKm.toFixed(2)}` : '--'}
+                          unit={costPerKm > 0 ? "/km" : ""}
+                          highlight={costPerKm > 0}
+                        />
+                        <RecordStat
+                          label="平均電耗"
+                          value={traveledDistance > 0 && record.kwh > 0 ? (traveledDistance / record.kwh).toFixed(2) : '--'}
+                          unit={traveledDistance > 0 && record.kwh > 0 ? "km/kWh" : ""}
+                          highlight={traveledDistance > 0}
+                        />
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+        </div>
+        <style>{`
         @keyframes pulse-subtle {
           0%, 100% { box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3), 0 4px 6px -2px rgba(16, 185, 129, 0.05); }
           50% { box-shadow: 0 15px 25px -5px rgba(16, 185, 129, 0.4), 0 10px 10px -5px rgba(16, 185, 129, 0.1); }
@@ -740,7 +1004,8 @@ ${randomSlogan}
           animation: pulse-subtle 2.5s infinite ease-in-out;
         }
       `}</style>
-    </div>
+      </div>
+    </div >
   );
 };
 
@@ -757,3 +1022,4 @@ const RecordStat = ({ label, value, unit, highlight = false }: { label: string, 
 );
 
 export default UserDashboard;
+

@@ -7,7 +7,7 @@ service cloud.firestore {
       // 1. 如果紀錄被標記為精選 (isFeatured == true)，任何人（包括未登入遊客）皆可讀取
       // 2. 如果是紀錄的擁有者 (uid 匹配)，可以讀取
       // 3. 如果是管理員，可以讀取
-      allow read: if (resource.data.isFeatured == true) || 
+      allow read: if (resource == null) || (resource.data.isFeatured == true) || 
                    (request.auth != null && (
                      resource.data.uid == request.auth.uid || 
                      request.auth.token.email == 'km520daisy@gmail.com'
@@ -20,6 +20,30 @@ service cloud.firestore {
       // 2. 修改/刪除：必須是擁有者或管理員
       allow update, delete: if request.auth != null && (
         resource.data.uid == request.auth.uid || 
+        request.auth.token.email == 'km520daisy@gmail.com'
+      );
+    }
+    
+    // 其他開支 (Variable Expenses)
+    match /other_expenses/{expenseId} {
+      // 讀取：擁有者或管理員
+      allow read: if request.auth != null && (
+        resource == null ||
+        resource.data.uid == request.auth.uid || 
+        request.auth.token.email == 'km520daisy@gmail.com'
+      );
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if request.auth != null && (
+        resource.data.uid == request.auth.uid || 
+        request.auth.token.email == 'km520daisy@gmail.com'
+      );
+    }
+
+    // 用戶設定 - 約定款項 (Fixed Expenses)
+    match /user_settings/{userId} {
+      // 讀取與寫入只能是本人或管理員
+      allow read, write: if request.auth != null && (
+        userId == request.auth.uid || 
         request.auth.token.email == 'km520daisy@gmail.com'
       );
     }

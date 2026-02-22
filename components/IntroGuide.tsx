@@ -10,28 +10,28 @@ const IntroGuide: React.FC = () => {
           掌控您的電車生活
         </h1>
         <div className="max-w-3xl mx-auto space-y-4 text-lg text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-            <p>
-              電動車在香港普及速度極快，但配套資訊依然碎片化。EV Charging Tracker 致力於為本地車主提供最直觀、最精準的充電紀錄與數據監測服務。
-            </p>
-            <p>
-              作為一個獨立開發專案，我希望透過科技優化香港的綠色出行體驗。如果您認同這個工具的價值，歡迎透過 <a href="https://buymeacoffee.com/evchargingtracker.com" target="_blank" rel="noopener noreferrer" className="font-bold text-amber-500 inline-flex items-center hover:underline hover:text-amber-600 transition-colors">Buy Me a Coffee</a> 給予支持。您的慷慨贊助將確保系統穩定運行。
-            </p>
+          <p>
+            電動車在香港普及速度極快，但配套資訊依然碎片化。EV Charging Tracker 致力於為本地車主提供最直觀、最精準的充電紀錄與數據監測服務。
+          </p>
+          <p>
+            作為一個獨立開發專案，我希望透過科技優化香港的綠色出行體驗。如果您認同這個工具的價值，歡迎透過 <a href="https://buymeacoffee.com/evchargingtracker.com" target="_blank" rel="noopener noreferrer" className="font-bold text-amber-500 inline-flex items-center hover:underline hover:text-amber-600 transition-colors">Buy Me a Coffee</a> 給予支持。您的慷慨贊助將確保系統穩定運行。
+          </p>
         </div>
       </div>
 
       {/* Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <FeatureCard 
+        <FeatureCard
           icon={<Calculator className="w-8 h-8 text-blue-500" />}
           title="快速試算"
           description="無需登入即可使用。輸入充電度數與單價，立即計算預估費用，支援公用與家用充電場景。"
         />
-        <FeatureCard 
+        <FeatureCard
           icon={<Save className="w-8 h-8 text-emerald-500" />}
           title="雲端同步"
           description="使用 Google 帳號一鍵登入，自動同步您的所有充電紀錄。包含地點、時間、里程與評分。"
         />
-        <FeatureCard 
+        <FeatureCard
           icon={<TrendingUp className="w-8 h-8 text-amber-500" />}
           title="數據洞察"
           description="自動生成視覺化圖表，分析每月充電度數、行駛里程與平均電價 ($/kWh)，掌握長期成本。"
@@ -45,53 +45,55 @@ const IntroGuide: React.FC = () => {
           功能導覽與使用指南
         </h2>
         <div className="space-y-10">
-          <Step 
-            number="1" 
-            title="進行試算 (非必要)" 
-            desc="在頁面頂部的「快速試算」區塊輸入度數與費率，快速查看預估金額。此功能無需登入即可使用。" 
+          <Step
+            number="1"
+            title="進行試算 (非必要)"
+            desc="在頁面頂部的「快速試算」區塊輸入度數與費率，快速查看預估金額。此功能無需登入即可使用。"
           />
-          <Step 
-            number="2" 
-            title="登入帳號" 
-            desc="點擊右上角的「Google 登入」按鈕。我們使用 Google 安全驗證，資料加密儲存於雲端，安全無虞。" 
+          <Step
+            number="2"
+            title="登入帳號"
+            desc="點擊右上角的「Google 登入」按鈕。我們使用 Google 安全驗證，資料加密儲存於雲端，安全無虞。"
           />
-          <Step 
-            number="3" 
-            title="詳細紀錄" 
-            desc="登入後，填寫充電地點、時間、模式 (計時/計量)、度數與總金額。您可以紀錄當前里程數以計算行駛距離，並對體驗進行評分。" 
-          />
-          <Step 
-            number="4" 
-            title="數據儀表板" 
-            desc="系統會自動將您的紀錄轉化為圖表。您可以切換查看「電力消耗」與「行駛里程」趨勢，並檢視詳細的歷史列表與平均單價分析。" 
-          />
-          <Step 
-            number="5" 
-            title="個人化設定" 
-            desc="自由切換「深色/淺色模式」或「大字體模式」。若喜歡此工具，也歡迎點擊頂部的 Threads 追蹤我們的最新動態！" 
-          />
-          <Step 
-            number="6" 
-            title="社群分享成果" 
+          <Step
+            number="3"
+            title="詳細紀錄與開支追蹤"
             isNew
-            desc="點擊歷史紀錄旁的「分享成果」按鈕。系統將自動生成包含地點、度數、每公里成本的精美文字與正能量金句，讓您輕鬆分享至 Threads 或 WhatsApp 展現電車省錢成果。" 
+            desc="登入後，不僅可以紀錄充電地點、時間與度數，現在還能切換至「開支紀錄」分頁，輕鬆追蹤「時租」、「隧道費」、「汽車美容」、「保養維修」甚至「定額罰款」等各種養車費用。"
+          />
+          <Step
+            number="4"
+            title="約定款項與到期提示"
+            isNew
+            desc="點擊右上角齒輪進入「約定款項設定」，您可以設定每月的車貸、固定停車費與扣款日，以及每年需繳納的保險費和牌照費。系統會在到期前 30 天於儀表板發出貼心提醒！"
+          />
+          <Step
+            number="5"
+            title="終極數據儀表板"
+            isNew
+            desc="您的所有花費將被統整為色彩鮮明的「本月開銷結構」圓餅圖，直觀顯示充電、變動開支與約定款項的比例。同時為您計算「每公里成本 ($/km)」與「平均電耗 (km/kWh)」。"
+          />
+          <Step
+            number="6"
+            title="社群分享成果"
+            desc="點擊歷史紀錄旁的「分享成果」按鈕。系統將自動生成包含地點、度數、每公里成本的精美文字與正能量金句，讓您輕鬆分享至 Threads 或 WhatsApp 展現電車省錢成果。"
           />
         </div>
 
         {/* 最近新增：體驗金句預覽 */}
         <div className="mt-12 p-6 bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-100 dark:border-slate-800">
-           <div className="flex items-center gap-2 mb-4">
-             <Sparkles size={16} className="text-amber-500" />
-             <span className="text-xs font-black uppercase tracking-widest text-slate-400">最近新增：社群分享金句預覽</span>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm italic text-sm text-slate-600 dark:text-slate-400">
-                「今天我又省下了一筆油費，還為環保出了一份力！🔋」
-              </div>
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm italic text-sm text-slate-600 dark:text-slate-400">
-                「馭電智行，讓每一公里都充滿潔淨能量！🌱」
-              </div>
-           </div>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles size={16} className="text-amber-500" />
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400">最近新增：社群分享金句預覽</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm italic text-sm text-slate-600 dark:text-slate-400">
+              「今天我又省下了一筆油費，還為環保出了一份力！🔋」
+            </div>
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm italic text-sm text-slate-600 dark:text-slate-400">
+              「馭電智行，讓每一公里都充滿潔淨能量！🌱」
+            </div>
+          </div>
         </div>
       </div>
     </div>

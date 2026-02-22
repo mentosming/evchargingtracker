@@ -24,3 +24,29 @@ export interface User {
 }
 
 export const ADMIN_EMAIL = 'km520daisy@gmail.com';
+
+export interface VariableExpense {
+  id?: string;
+  uid: string;
+  userEmail: string;
+  timestamp: number;
+  category: 'Parking' | 'Toll' | 'Maintenance' | 'Detailing' | 'Fine' | 'Other';
+  amount: number;
+  notes?: string;
+}
+
+export interface FixedExpenses {
+  id?: string;
+  uid: string;
+  userEmail: string;
+  monthlyLoan: number;
+  monthlyLoanPayDay?: number;
+  monthlyParking: number;
+  monthlyParkingPayDay?: number;
+  insuranceExpiry: number | null; // Timestamp
+  insuranceAnnualCost: number;
+  licenseExpiry: number | null; // Timestamp
+  licenseAnnualCost: number;
+  lastUpdated: number;
+}
+

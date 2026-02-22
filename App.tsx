@@ -4,6 +4,7 @@ import PublicCalculator from './components/PublicCalculator';
 import UserDashboard from './components/UserDashboard';
 import AdminPanel from './components/AdminPanel';
 import IntroGuide from './components/IntroGuide';
+import SettingsPanel from './components/SettingsPanel';
 import { onAuthStateChange } from './services/firebase';
 import { User, ADMIN_EMAIL } from './types';
 
@@ -13,6 +14,7 @@ const App: React.FC = () => {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLargeText, setIsLargeText] = useState(false);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
 
   // Auth State Listener
   useEffect(() => {
@@ -99,26 +101,29 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-12 transition-colors duration-300">
-      <Navbar 
-        user={user} 
-        isAdminMode={isAdminMode} 
-        toggleAdminMode={toggleAdminMode} 
-        isDarkMode={isDarkMode} 
-        toggleTheme={toggleTheme} 
-        isLargeText={isLargeText} 
-        toggleLargeText={toggleLargeText} 
+      <Navbar
+        user={user}
+        isAdminMode={isAdminMode}
+        toggleAdminMode={toggleAdminMode}
+        isDarkMode={isDarkMode}
+        toggleTheme={toggleTheme}
+        isLargeText={isLargeText}
+        toggleLargeText={toggleLargeText}
+        onSettingsClick={() => setCurrentView('settings')}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Main Content Area: UserDashboard / Admin / Intro */}
+
+        {/* Main Content Area: UserDashboard / Admin / Intro / Settings */}
         <div className="transition-all duration-300 mb-12">
           {!user ? (
             <IntroGuide />
           ) : isAdminMode ? (
             <AdminPanel />
+          ) : currentView === 'settings' ? (
+            <SettingsPanel user={user} onBack={() => setCurrentView('dashboard')} />
           ) : (
-            <UserDashboard user={user} />
+            <UserDashboard user={user} onSettingsClick={() => setCurrentView('settings')} />
           )}
         </div>
 
